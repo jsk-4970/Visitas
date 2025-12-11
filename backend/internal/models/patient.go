@@ -6,53 +6,68 @@ import (
 	"time"
 )
 
-// Patient represents the enhanced patient model with JSONB history fields
+// Patient represents the enhanced patient model aligned with DATABASE_REQUIREMENTS.md
 type Patient struct {
 	PatientID string `json:"patient_id" spanner:"patient_id"`
 
 	// Basic Demographics
 	BirthDate sql.NullTime `json:"birth_date" spanner:"birth_date"`
-	Gender    string       `json:"gender,omitempty" spanner:"gender"`
+	Gender    string       `json:"gender" spanner:"gender"`
 	BloodType string       `json:"blood_type,omitempty" spanner:"blood_type"`
 
 	// JSONB Fields (stored as JSON in database)
-	NameHistory    json.RawMessage `json:"name_history" spanner:"name_history"`
-	ContactPoints  json.RawMessage `json:"contact_points" spanner:"contact_points"`
-	Addresses      json.RawMessage `json:"addresses" spanner:"addresses"`
-	ConsentDetails json.RawMessage `json:"consent_details,omitempty" spanner:"consent_details"`
+	// Name includes previousNames array internally
+	Name           json.RawMessage `json:"name" spanner:"name"`
+	ContactPoints  json.RawMessage `json:"contact_points,omitempty" spanner:"contact_points"`
+	Addresses      json.RawMessage `json:"addresses,omitempty" spanner:"addresses"`
+	ConsentRecords json.RawMessage `json:"consent_records,omitempty" spanner:"consent_records"`
+
+	// Photo
+	PhotoURL string `json:"photo_url,omitempty" spanner:"photo_url"`
 
 	// Generated Columns (read-only from database)
-	CurrentFamilyName string `json:"current_family_name,omitempty" spanner:"current_family_name"`
-	CurrentGivenName  string `json:"current_given_name,omitempty" spanner:"current_given_name"`
-	PrimaryPhone      string `json:"primary_phone,omitempty" spanner:"primary_phone"`
-	CurrentPrefecture string `json:"current_prefecture,omitempty" spanner:"current_prefecture"`
-	CurrentCity       string `json:"current_city,omitempty" spanner:"current_city"`
+	FullName     string `json:"full_name,omitempty" spanner:"full_name"`
+	FullNameKana string `json:"full_name_kana,omitempty" spanner:"full_name_kana"`
+	PrimaryPhone string `json:"primary_phone,omitempty" spanner:"primary_phone"`
 
-	// Consent Management
-	ConsentStatus      string       `json:"consent_status" spanner:"consent_status"`
-	ConsentObtainedAt  sql.NullTime `json:"consent_obtained_at,omitempty" spanner:"consent_obtained_at"`
-	ConsentWithdrawnAt sql.NullTime `json:"consent_withdrawn_at,omitempty" spanner:"consent_withdrawn_at"`
+	// System Management
+	Active bool `json:"active" spanner:"active"`
 
 	// Soft Delete
-	Deleted       bool         `json:"deleted" spanner:"deleted"`
-	DeletedAt     sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
-	DeletedReason string       `json:"deleted_reason,omitempty" spanner:"deleted_reason"`
+	IsDeleted bool         `json:"is_deleted" spanner:"is_deleted"`
+	DeletedAt sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
 
 	// Audit Timestamps
 	CreatedAt time.Time `json:"created_at" spanner:"created_at"`
-	CreatedBy string    `json:"created_by,omitempty" spanner:"created_by"`
 	UpdatedAt time.Time `json:"updated_at" spanner:"updated_at"`
-	UpdatedBy string    `json:"updated_by,omitempty" spanner:"updated_by"`
+
+	// Security
+	DataClassification   string `json:"data_classification" spanner:"data_classification"`
+	EncryptionKeyVersion int    `json:"encryption_key_version" spanner:"encryption_key_version"`
 }
 
-// NameRecord represents a single name history entry
-type NameRecord struct {
-	Use       string    `json:"use"` // official, maiden, nickname
-	Family    string    `json:"family"`
-	Given     string    `json:"given"`
-	Kana      string    `json:"kana,omitempty"`
-	ValidFrom time.Time `json:"valid_from"`
-	ValidTo   *time.Time `json:"valid_to,omitempty"` // nil means current name
+// Name represents patient name with history
+// Aligned with DATABASE_REQUIREMENTS.md specification
+type Name struct {
+	Use           string         `json:"use"` // official, maiden, nickname
+	Family        string         `json:"family"`
+	Given         string         `json:"given"`
+	Kana          string         `json:"kana,omitempty"`
+	PreviousNames []PreviousName `json:"previousNames,omitempty"`
+}
+
+// PreviousName represents a historical name entry
+type PreviousName struct {
+	Family       string  `json:"family"`
+	Given        string  `json:"given"`
+	Period       Period  `json:"period"`
+	ChangeReason string  `json:"changeReason,omitempty"` // 婚姻, 離婚, etc.
+}
+
+// Period represents a time period
+type Period struct {
+	Start string  `json:"start,omitempty"` // ISO 8601 date
+	End   string  `json:"end,omitempty"`   // ISO 8601 date
 }
 
 // ContactPoint represents a contact method
@@ -88,21 +103,23 @@ type Geolocation struct {
 type PatientCreateRequest struct {
 	// Basic Demographics
 	BirthDate string `json:"birth_date" validate:"required"` // YYYY-MM-DD
-	Gender    string `json:"gender,omitempty"`
+	Gender    string `json:"gender" validate:"required"`
 	BloodType string `json:"blood_type,omitempty"`
 
-	// Name (will be converted to name_history JSONB array)
-	Name NameRecord `json:"name" validate:"required"`
+	// Name (will be stored as JSONB object)
+	Name Name `json:"name" validate:"required"`
 
 	// Contact Points (JSONB array)
-	ContactPoints []ContactPoint `json:"contact_points" validate:"required,min=1"`
+	ContactPoints []ContactPoint `json:"contact_points,omitempty"`
 
 	// Addresses (JSONB array)
-	Addresses []Address `json:"addresses" validate:"required,min=1"`
+	Addresses []Address `json:"addresses,omitempty"`
 
-	// Consent
-	ConsentStatus     string     `json:"consent_status" validate:"required,oneof=obtained not_obtained conditional"`
-	ConsentObtainedAt *time.Time `json:"consent_obtained_at,omitempty"`
+	// Photo
+	PhotoURL string `json:"photo_url,omitempty"`
+
+	// Consent Records (JSONB)
+	ConsentRecords json.RawMessage `json:"consent_records,omitempty"`
 }
 
 // PatientUpdateRequest represents the request payload for updating a patient
@@ -112,25 +129,23 @@ type PatientUpdateRequest struct {
 	Gender    *string `json:"gender,omitempty"`
 	BloodType *string `json:"blood_type,omitempty"`
 
-	// Add new name (will be appended to name_history)
-	AddName *NameRecord `json:"add_name,omitempty"`
-
-	// Add new contact point
-	AddContactPoint *ContactPoint `json:"add_contact_point,omitempty"`
+	// Name (will update the entire name object)
+	Name *Name `json:"name,omitempty"`
 
 	// Update contact points (replaces entire array)
 	ContactPoints *[]ContactPoint `json:"contact_points,omitempty"`
 
-	// Add new address
-	AddAddress *Address `json:"add_address,omitempty"`
-
 	// Update addresses (replaces entire array)
 	Addresses *[]Address `json:"addresses,omitempty"`
 
-	// Consent Status
-	ConsentStatus      *string    `json:"consent_status,omitempty"`
-	ConsentObtainedAt  *time.Time `json:"consent_obtained_at,omitempty"`
-	ConsentWithdrawnAt *time.Time `json:"consent_withdrawn_at,omitempty"`
+	// Photo
+	PhotoURL *string `json:"photo_url,omitempty"`
+
+	// Consent Records
+	ConsentRecords *json.RawMessage `json:"consent_records,omitempty"`
+
+	// Active status
+	Active *bool `json:"active,omitempty"`
 }
 
 // PatientListResponse represents paginated patient list
@@ -142,24 +157,14 @@ type PatientListResponse struct {
 	TotalPages int       `json:"total_pages"`
 }
 
-// Helper method to convert NameHistory to structured format
-func (p *Patient) GetNameHistory() ([]NameRecord, error) {
-	var names []NameRecord
-	if len(p.NameHistory) == 0 {
-		return names, nil
+// Helper method to convert Name to structured format
+func (p *Patient) GetName() (*Name, error) {
+	var name Name
+	if len(p.Name) == 0 {
+		return nil, nil
 	}
-	err := json.Unmarshal(p.NameHistory, &names)
-	return names, err
-}
-
-// Helper method to get current name
-func (p *Patient) GetCurrentName() (*NameRecord, error) {
-	names, err := p.GetNameHistory()
-	if err != nil || len(names) == 0 {
-		return nil, err
-	}
-	// Return the last name in the array (most recent)
-	return &names[len(names)-1], nil
+	err := json.Unmarshal(p.Name, &name)
+	return &name, err
 }
 
 // Helper method to convert ContactPoints to structured format
