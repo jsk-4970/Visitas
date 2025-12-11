@@ -1,0 +1,11 @@
+# GCP Project settings
+project_id = "visitas-dev"
+region     = "asia-northeast1"
+
+# Environment
+environment = "dev"
+
+# Spanner settings
+spanner_instance_name    = "visitas-dev-instance"
+spanner_database_name    = "visitas-dev-db"
+spanner_processing_units = 100

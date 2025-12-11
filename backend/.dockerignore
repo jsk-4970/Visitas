@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.test
+*.out
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Firebase credentials
+config/firebase-service-account.json
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Documentation
+README.md
+docs/

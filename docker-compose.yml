@@ -1,0 +1,66 @@
+version: '3.9'
+
+services:
+  # Spanner Emulator
+  spanner-emulator:
+    image: gcr.io/cloud-spanner-emulator/emulator:latest
+    ports:
+      - "9010:9010"
+      - "9020:9020"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:9010"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - visitas-network
+
+  # API Server
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - GCP_PROJECT_ID=visitas-dev
+      - GCP_REGION=asia-northeast1
+      - SPANNER_INSTANCE=visitas-dev-instance
+      - SPANNER_DATABASE=visitas-dev-db
+      - SPANNER_EMULATOR_HOST=spanner-emulator:9010
+      - PORT=8080
+      - ENV=development
+      - LOG_LEVEL=debug
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+    depends_on:
+      spanner-emulator:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/bin
+    networks:
+      - visitas-network
+    restart: unless-stopped
+
+  # Firebase Emulator (Optional - for local auth testing)
+  firebase-emulator:
+    image: andreysenov/firebase-tools:latest
+    ports:
+      - "4000:4000"  # Emulator UI
+      - "9099:9099"  # Authentication
+      - "8081:8081"  # Firestore
+    environment:
+      - FIREBASE_PROJECT=visitas-dev
+    volumes:
+      - ./firebase:/home/node
+    working_dir: /home/node
+    command: firebase emulators:start --project visitas-dev
+    networks:
+      - visitas-network
+
+networks:
+  visitas-network:
+    driver: bridge
+
+volumes:
+  spanner-data:
