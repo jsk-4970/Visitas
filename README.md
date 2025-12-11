@@ -199,14 +199,14 @@ terraform apply
 ```bash
 # Dockerイメージをビルド & プッシュ
 cd backend
-gcloud builds submit --tag asia-northeast1-docker.pkg.dev/visitas-dev/visitas-dev/api:latest
+gcloud builds submit --tag asia-northeast1-docker.pkg.dev/stunning-grin-480914-n1/visitas-dev/api:latest
 
 # Cloud Runにデプロイ
 gcloud run deploy visitas-api \
-  --image asia-northeast1-docker.pkg.dev/visitas-dev/visitas-dev/api:latest \
+  --image asia-northeast1-docker.pkg.dev/stunning-grin-480914-n1/visitas-dev/api:latest \
   --platform managed \
   --region asia-northeast1 \
-  --service-account visitas-dev-run@visitas-dev.iam.gserviceaccount.com
+  --service-account visitas-dev-run@stunning-grin-480914-n1.iam.gserviceaccount.com
 ```
 
 ## 🔒 セキュリティ
@@ -224,7 +224,7 @@ gcloud run deploy visitas-api \
 
 ```bash
 # backend/.env
-GCP_PROJECT_ID=visitas-dev
+GCP_PROJECT_ID=stunning-grin-480914-n1
 SPANNER_EMULATOR_HOST=localhost:9010
 GOOGLE_MAPS_API_KEY=your_key_here
 ```

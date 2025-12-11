@@ -1,7 +1,7 @@
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
-  default     = "visitas-dev"
+  default     = "stunning-grin-480914-n1"
 }
 
 variable "region" {
@@ -19,13 +19,13 @@ variable "environment" {
 variable "spanner_instance_name" {
   description = "Cloud Spanner instance name"
   type        = string
-  default     = "visitas-dev-instance"
+  default     = "stunning-grin-480914-n1-instance"
 }
 
 variable "spanner_database_name" {
   description = "Cloud Spanner database name"
   type        = string
-  default     = "visitas-dev-db"
+  default     = "stunning-grin-480914-n1-db"
 }
 
 variable "spanner_processing_units" {

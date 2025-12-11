@@ -4,10 +4,10 @@
 .DEFAULT_GOAL := help
 
 # 変数
-PROJECT_ID := visitas-dev
+PROJECT_ID := stunning-grin-480914-n1
 REGION := asia-northeast1
-SPANNER_INSTANCE := visitas-dev-instance
-SPANNER_DATABASE := visitas-dev-db
+SPANNER_INSTANCE := stunning-grin-480914-n1-instance
+SPANNER_DATABASE := stunning-grin-480914-n1-db
 
 help: ## ヘルプを表示
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

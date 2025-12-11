@@ -14,7 +14,7 @@ terraform {
 
   # Terraform State をCloud Storageに保存（初回はローカルで実行してから設定）
   # backend "gcs" {
-  #   bucket = "visitas-dev-terraform-state"
+  #   bucket = "stunning-grin-480914-n1-terraform-state"
   #   prefix = "terraform/state"
   # }
 }

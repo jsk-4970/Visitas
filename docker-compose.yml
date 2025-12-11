@@ -23,10 +23,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - GCP_PROJECT_ID=visitas-dev
+      - GCP_PROJECT_ID=stunning-grin-480914-n1
       - GCP_REGION=asia-northeast1
-      - SPANNER_INSTANCE=visitas-dev-instance
-      - SPANNER_DATABASE=visitas-dev-db
+      - SPANNER_INSTANCE=stunning-grin-480914-n1-instance
+      - SPANNER_DATABASE=stunning-grin-480914-n1-db
       - SPANNER_EMULATOR_HOST=spanner-emulator:9010
       - PORT=8080
       - ENV=development
@@ -50,11 +50,11 @@ services:
       - "9099:9099"  # Authentication
       - "8081:8081"  # Firestore
     environment:
-      - FIREBASE_PROJECT=visitas-dev
+      - FIREBASE_PROJECT=stunning-grin-480914-n1
     volumes:
       - ./firebase:/home/node
     working_dir: /home/node
-    command: firebase emulators:start --project visitas-dev
+    command: firebase emulators:start --project stunning-grin-480914-n1
     networks:
       - visitas-network
 

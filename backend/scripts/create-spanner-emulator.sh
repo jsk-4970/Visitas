@@ -4,9 +4,9 @@
 
 set -e
 
-PROJECT_ID="visitas-dev"
-INSTANCE_ID="visitas-dev-instance"
-DATABASE_ID="visitas-dev-db"
+PROJECT_ID="stunning-grin-480914-n1"
+INSTANCE_ID="stunning-grin-480914-n1-instance"
+DATABASE_ID="stunning-grin-480914-n1-db"
 
 echo "==> Setting up Spanner Emulator..."
 

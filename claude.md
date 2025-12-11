@@ -315,7 +315,7 @@ Visitas/
 ```bash
 # 1. GCP認証
 gcloud auth login
-gcloud config set project visitas-dev
+gcloud config set project stunning-grin-480914-n1
 
 # 2. Goバックエンド
 cd backend
@@ -341,10 +341,10 @@ terraform plan
 
 ```bash
 # .env.local (ローカル開発用)
-export GCP_PROJECT_ID=visitas-dev
+export GCP_PROJECT_ID=stunning-grin-480914-n1
 export GCP_REGION=asia-northeast1
-export SPANNER_INSTANCE=visitas-dev-instance
-export SPANNER_DATABASE=visitas-dev-db
+export SPANNER_INSTANCE=stunning-grin-480914-n1-instance
+export SPANNER_DATABASE=stunning-grin-480914-n1-db
 export FIREBASE_CONFIG_PATH=./firebase-config.json
 export GEMINI_API_KEY=your_api_key_here
 export GOOGLE_MAPS_API_KEY=your_maps_key_here
@@ -377,8 +377,8 @@ export LOG_LEVEL=debug
    ```
 2. 適用:
    ```bash
-   gcloud spanner databases ddl update visitas-dev-db \
-     --instance=visitas-dev-instance \
+   gcloud spanner databases ddl update stunning-grin-480914-n1-db \
+     --instance=stunning-grin-480914-n1-instance \
      --ddl="$(cat migrations/001_create_patients.sql)"
    ```
 3. `internal/models/`のGoモデルを更新
