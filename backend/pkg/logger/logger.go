@@ -217,3 +217,28 @@ func Error(msg string, err error, fields ...map[string]interface{}) {
 func Fatal(msg string, err error, fields ...map[string]interface{}) {
 	defaultLogger.Fatal(msg, err, fields...)
 }
+
+// DebugContext logs a debug message with context using the global logger
+func DebugContext(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	defaultLogger.DebugContext(ctx, msg, fields...)
+}
+
+// InfoContext logs an info message with context using the global logger
+func InfoContext(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	defaultLogger.InfoContext(ctx, msg, fields...)
+}
+
+// WarnContext logs a warning message with context using the global logger
+func WarnContext(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	defaultLogger.WarnContext(ctx, msg, fields...)
+}
+
+// ErrorContext logs an error message with context using the global logger
+func ErrorContext(ctx context.Context, msg string, err error, fields ...map[string]interface{}) {
+	defaultLogger.ErrorContext(ctx, msg, err, fields...)
+}
+
+// FatalContext logs a fatal message with context using the global logger and exits
+func FatalContext(ctx context.Context, msg string, err error, fields ...map[string]interface{}) {
+	defaultLogger.FatalContext(ctx, msg, err, fields...)
+}
