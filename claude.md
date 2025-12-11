@@ -6,7 +6,10 @@ Visitasは、日本の在宅医療（訪問診療）の課題を解決するた�
 
 ## コアバリュー
 
-1. **Ambient Clinical Intelligence**: Gemini 1.5 Proによる診療会話の自動構造化（SOAP形式）
+1. **Multi-Modal Clinical Documentation**: 3つのアプローチによるカルテ作成の効率化
+   - 既存カルテからのテンプレート化・再利用
+   - 紹介状・診療情報提供書からの自動構造化
+   - 診療会話の音声認識とSOAP自動生成（Ambient Clinical Intelligence）
 2. **AI-Powered Documentation**: 生成AIによる法的書類（訪問看護指示書等）の自動下書き作成
 3. **Dynamic Logistics**: Google Maps Route Optimization APIによる訪問ルートの最適化
 4. **Secure Mobility**: オフラインファースト設計と3省2ガイドライン準拠のセキュリティ
@@ -21,7 +24,9 @@ Visitasは、日本の在宅医療（訪問診療）の課題を解決するた�
 - **リアルタイムDB**: Firestore (チャット、位置情報更新)
 - **認証**: Firebase Authentication / Identity Platform
 - **AI/ML**: Vertex AI (Gemini 1.5 Pro/Flash)
-- **ストレージ**: Cloud Storage (音声、画像、バックアップ)
+- **音声認識**: Cloud Speech-to-Text (医療用語特化モデル)
+- **文書解析**: Gemini 1.5 Pro Document AI (紹介状・診療情報提供書の解析)
+- **ストレージ**: Cloud Storage (音声、画像、PDF、バックアップ)
 - **依存管理**: Go Modules
 - **文書生成**: gofpdf / excelize (PDF/Excel生成)
 
@@ -57,10 +62,14 @@ Visitas/
 │   │   │   └── firestore/ # Firestore実装
 │   │   ├── middleware/    # 認証、ログ、CORS等
 │   │   └── ai/           # Vertex AI / Gemini統合
+│   │       ├── prompts/  # プロンプトテンプレート
+│   │       └── document_parser.go
 │   ├── pkg/              # 外部パッケージで使用可能なコード
 │   │   ├── auth/        # 認証ユーティリティ
 │   │   ├── logger/      # ログ
-│   │   └── validator/   # バリデーション
+│   │   ├── validator/   # バリデーション
+│   │   ├── pdfgen/      # PDF生成ユーティリティ
+│   │   └── excelgen/    # Excel生成ユーティリティ
 │   ├── migrations/       # Spannerマイグレーション
 │   ├── scripts/         # ビルド、デプロイスクリプト
 │   ├── tests/          # テストコード
@@ -73,6 +82,13 @@ Visitas/
 │   │   ├── special_nursing_instruction.json
 │   │   ├── medication_instruction.json
 │   │   └── point_instruction.json
+│   ├── medical_record_templates/  # カルテテンプレート
+│   │   ├── soap_template.json     # SOAP形式の標準テンプレート
+│   │   ├── common_phrases.json    # よく使う定型文
+│   │   └── specialty_templates/   # 診療科別テンプレート
+│   │       ├── internal_medicine.json
+│   │       ├── neurology.json
+│   │       └── palliative_care.json
 │   └── .air.toml       # ホットリロード設定
 ├── mobile/              # Flutterモバイルアプリ
 │   ├── lib/
@@ -108,7 +124,7 @@ Visitas/
 
 ## 開発フェーズ
 
-### Phase 1: MVP (1-3ヶ月) - **現在のフォーカス**
+### Phase 1: MVP (Week 1-14 / 約3.5ヶ月) - **現在のフォーカス**
 
 #### Sprint 1: 基本インフラとDB設計 (Week 1-2)
 - GCPプロジェクトセットアップ
@@ -141,9 +157,19 @@ Visitas/
 - Googleマップアプリへのディープリンク
 - 基本的な移動距離計算
 
-### Phase 2: AI Integration (4-6ヶ月)
+#### Sprint 6: 基本カルテ機能 (Week 13-14)
+- **カルテデータモデル設計**: SOAP形式（Subjective, Objective, Assessment, Plan）をSpannerスキーマで定義
+- **カルテCRUD API**: 手動入力によるカルテ作成・編集・削除
+- **カルテテンプレート機能**: 既存カルテからの複製・再利用
+  - 患者別の過去カルテ一覧表示
+  - テンプレートとして保存（定型文、よく使う記載パターン）
+  - 一括コピー・部分コピー機能
+- **モバイルUI**: カルテ入力画面、履歴表示
+- **実装理由**: AI機能の前に基本的なカルテ管理基盤を構築（最も簡単で即座に使える機能）
 
-#### Sprint 6: 法的書類AI生成（高優先度） (Week 13-16)
+### Phase 2: AI Integration (Week 15-26 / 約3ヶ月)
+
+#### Sprint 7: 法的書類AI生成（高優先度） (Week 15-18)
 - **対象書類**: 訪問看護指示書、居宅療養指導書、特別訪問看護指示書、訪問薬剤管理指導書、点的指示書
 - **書類テンプレート設計**: JSON形式で各書類の構造定義
 - **データ統合API**:
@@ -163,17 +189,58 @@ Visitas/
   - 参照元データの監査ビュー
   - 最終承認ワークフロー
 
-#### Sprint 7: SOAP自動生成 (Week 17-20)
-- 音声録音・アップロード機能
-- Gemini 1.5 Proによる診療会話の自動SOAP生成
-- AIサマリー確認・修正UI
-- プロンプトエンジニアリング最適化
+#### Sprint 8: 紹介状からのカルテ自動生成（中程度） (Week 19-22)
+- **対象文書**: 他医療機関からの紹介状、診療情報提供書、退院サマリー
+- **文書解析機能**:
+  - PDFアップロード機能（Cloud Storage統合）
+  - Gemini 1.5 ProのDocument AI機能による文書解析
+  - 構造化されたテキストからの情報抽出（患者情報、既往歴、現病歴、処方薬等）
+- **カルテ変換API**:
+  - 抽出情報をSOAP形式に自動マッピング
+  - 不足情報の検出とアラート表示
+  - 手動補完が必要な項目のハイライト
+- **レビューUI**:
+  - 元文書と生成カルテの並列表示
+  - 抽出精度の確認・修正
+  - 承認ワークフロー
+- **実装理由**: 医療文書は構造化されているため、音声よりも解析が容易。新規患者の初診カルテ作成を効率化
 
-### Phase 3: Optimization (7-9ヶ月)
-- Route Optimization API実装
-- FHIR API連携
-- IoT/ウェアラブル連携
-- データ分析基盤（BigQuery）
+#### Sprint 9: 会話からのカルテ自動生成（複雑） (Week 23-26)
+- **音声収録機能**:
+  - モバイルアプリでの診療中音声録音
+  - バックグラウンド録音対応
+  - Cloud Storageへの安全なアップロード（暗号化）
+- **Gemini 1.5 Pro統合**:
+  - 音声認識（Speech-to-Text）
+  - 会話のコンテキスト理解
+  - 医療用語の正確な認識（日本語医療ドメイン特化）
+- **SOAP自動生成**:
+  - S（主観的情報）: 患者の訴え・症状の抽出
+  - O（客観的情報）: バイタルサイン、検査所見の抽出
+  - A（評価）: 病状の評価・診断の生成
+  - P（計画）: 治療方針・処方の生成
+- **AIサマリー確認・修正UI**:
+  - 生成カルテのレビュー画面
+  - 音声再生とテキストの同期表示
+  - インライン編集機能
+  - 根拠となった会話箇所へのリンク
+- **プロンプトエンジニアリング最適化**:
+  - Few-shot learningによる精度向上
+  - 医師のフィードバックループ
+  - ドメイン特化型ファインチューニング検討
+- **実装理由**: 最も複雑だが、医師の記載業務を最大限削減。音声認識の精度とコンテキスト理解が課題
+
+#### カルテ作成機能の実装優先順位まとめ
+1. **Phase 1 Sprint 6**: 既存カルテからのテンプレート機能（簡単・即戦力）
+2. **Phase 2 Sprint 8**: 紹介状からの自動生成（中程度・新規患者対応）
+3. **Phase 2 Sprint 9**: 会話からの自動生成（複雑・最大の効率化）
+
+### Phase 3: Optimization & Scale (Week 27+ / 3ヶ月以降)
+- **Route Optimization API実装**: 複数患者への最適訪問順序の自動計算
+- **FHIR API連携**: 他医療機関との標準規格データ交換
+- **IoT/ウェアラブル連携**: 患者バイタルデータのリアルタイム収集
+- **データ分析基盤（BigQuery）**: 訪問パターン分析、予測モデル構築
+- **マルチテナント対応**: 複数医療機関での利用を想定した拡張
 
 ## 開発ガイドライン
 
@@ -324,6 +391,59 @@ export LOG_LEVEL=debug
 4. `lib/providers/`に状態管理（Riverpod）を実装
 5. ルーティング（GoRouter）を設定
 
+### カルテ関連機能の追加
+
+#### カルテテンプレートの追加
+1. `backend/medical_record_templates/`にJSON形式でテンプレート定義を作成
+   ```json
+   {
+     "template_id": "soap_standard_v1",
+     "template_name": "SOAP標準テンプレート",
+     "specialty": "general",
+     "sections": {
+       "subjective": {
+         "label": "S (主観的情報)",
+         "placeholder": "患者の訴え・症状を記載",
+         "common_phrases": ["自覚症状なし", "疼痛あり", "食欲不振"]
+       },
+       "objective": {
+         "label": "O (客観的情報)",
+         "placeholder": "バイタルサイン・検査所見を記載",
+         "fields": ["血圧", "脈拍", "体温", "SpO2"]
+       },
+       "assessment": {
+         "label": "A (評価)",
+         "placeholder": "病状の評価・診断を記載"
+       },
+       "plan": {
+         "label": "P (計画)",
+         "placeholder": "治療方針・処方を記載"
+       }
+     }
+   }
+   ```
+2. `internal/services/medical_record_service.go`にテンプレート管理ロジックを実装
+3. `internal/handlers/medical_records.go`にHTTPハンドラーを実装
+4. API仕様を`docs/API_SPEC.md`に追加
+
+#### 紹介状解析機能の追加
+1. `internal/ai/document_parser.go`に文書解析ロジックを実装
+   - Gemini 1.5 ProのDocument AI機能統合
+   - PDFテキスト抽出
+   - 情報の構造化（患者情報、既往歴、現病歴等）
+2. `internal/services/referral_service.go`にカルテ変換ロジックを実装
+3. `internal/handlers/referrals.go`にHTTPハンドラーを実装
+4. Cloud Storageへのアップロード機能実装
+
+#### 音声からのSOAP生成機能の追加
+1. `internal/ai/speech_to_soap.go`に音声認識・SOAP生成ロジックを実装
+   - Cloud Speech-to-Text統合
+   - Gemini 1.5 Proによるコンテキスト理解
+   - SOAP形式への構造化
+2. `internal/services/voice_record_service.go`に音声データ管理を実装
+3. モバイルアプリに録音機能を追加（`mobile/lib/services/audio_recorder.dart`）
+4. プロンプトテンプレートを`internal/ai/prompts/soap_generation.txt`に作成
+
 ### 法的書類テンプレートの追加
 
 1. `backend/document_templates/`にJSON形式でテンプレート定義を作成
@@ -410,15 +530,61 @@ go build -mod=vendor
 - リトライロジック（Exponential Backoff）を確認
 - Gemini 1.5 Flashへのダウングレードを検討
 
+### 音声認識の精度問題
+- **医療用語の誤認識**:
+  - Cloud Speech-to-Textのカスタム語彙機能を使用
+  - 専門用語リストを作成（病名、薬剤名、検査名等）
+  - `speech_contexts`パラメータで医療用語をブースト
+- **雑音・環境音の影響**:
+  - ノイズキャンセリング機能付きマイクの使用を推奨
+  - `enableAutomaticPunctuation`を有効化
+  - 音声品質の事前チェック機能を実装
+- **方言・訛りの認識**:
+  - 地域方言モデルの活用を検討
+  - ユーザーフィードバックによる継続的改善
+
+### カルテ生成の品質問題
+- **SOAP各項目の抽出漏れ**:
+  - プロンプトに「必須項目チェックリスト」を含める
+  - 不足項目を検出してアラート表示
+  - 医師による手動補完をガイド
+- **生成内容の不正確さ**:
+  - グラウンディング機能で根拠データへのリンクを表示
+  - 生成後の必須レビュープロセスを実装
+  - 医師のフィードバックをプロンプト改善に活用
+- **紹介状の解析エラー**:
+  - PDF形式によってはテキスト抽出が困難な場合あり
+  - OCR精度を確認（低い場合は手動入力をガイド）
+  - 抽出データの信頼度スコアを表示
+
+### Cloud Storageへのアップロード失敗
+- **ネットワーク接続**:
+  - オフライン時は自動リトライキューに追加
+  - 再接続時にバックグラウンド同期
+- **ファイルサイズ制限**:
+  - 音声ファイルは最大100MB（約1時間の診療）
+  - 必要に応じて圧縮（AAC形式推奨）
+- **権限エラー**:
+  - サービスアカウントに`storage.objects.create`権限を付与
+  - Cloud Storageバケットのライフサイクルポリシーを確認
+
 ## 参考リソース
 
+### 開発基盤
 - [Effective Go](https://golang.org/doc/effective_go)
 - [Go Cloud Spanner Client](https://pkg.go.dev/cloud.google.com/go/spanner)
+- [Flutter Medical App Best Practices](https://flutter.dev)
+
+### 医療・コンプライアンス
 - [3省2ガイドライン](https://www.mhlw.go.jp/)
 - [GCP Healthcare Solutions](https://cloud.google.com/solutions/healthcare-life-sciences)
-- [Gemini API Documentation](https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/gemini)
-- [Flutter Medical App Best Practices](https://flutter.dev)
 - [HL7 FHIR Specification](https://www.hl7.org/fhir/)
+
+### AI/ML・文書解析
+- [Gemini API Documentation](https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/gemini)
+- [Cloud Speech-to-Text](https://cloud.google.com/speech-to-text/docs)
+- [Gemini Document AI](https://cloud.google.com/vertex-ai/docs/generative-ai/multimodal/overview)
+- [Prompt Engineering for Healthcare](https://cloud.google.com/vertex-ai/docs/generative-ai/learn/prompts/prompt-engineering)
 
 ## チーム連絡先
 
