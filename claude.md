@@ -20,7 +20,7 @@ Visitasは、日本の在宅医療（訪問診療）の課題を解決するた�
 - **言語**: Go 1.22+ (Goroutinesによる高並行処理)
 - **Webフレームワーク**: Chi / Gin
 - **API基盤**: Cloud Run (サーバーレスコンテナ)
-- **メインDB**: Cloud Spanner (強整合性、99.99%可用性)
+- **メインDB**: Cloud Spanner PostgreSQL Interface (強整合性、99.99%可用性、JSONB型サポート)
 - **リアルタイムDB**: Firestore (チャット、位置情報更新)
 - **認証**: Firebase Authentication / Identity Platform
 - **AI/ML**: Vertex AI (Gemini 1.5 Pro/Flash)
@@ -368,12 +368,14 @@ export LOG_LEVEL=debug
 
 1. `migrations/`に`.sql`ファイルを作成
    ```sql
-   -- 001_create_patients.sql
-   CREATE TABLE Patients (
-     patient_id STRING(36) NOT NULL,
-     name STRING(100) NOT NULL,
-     created_at TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
-   ) PRIMARY KEY (patient_id);
+   -- 001_create_patients.sql (PostgreSQL Interface構文)
+   CREATE TABLE patients (
+     patient_id varchar(36) NOT NULL,
+     name_history jsonb NOT NULL,
+     birth_date date NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     PRIMARY KEY (patient_id)
+   );
    ```
 2. 適用:
    ```bash
