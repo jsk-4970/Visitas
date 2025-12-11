@@ -186,6 +186,9 @@ gcloud run deploy $SERVICE_NAME \
     --set-env-vars "LOG_LEVEL=$LOG_LEVEL" \
     --set-env-vars "FIREBASE_CONFIG_PATH=/secrets/firebase.json" \
     --set-secrets "/secrets/firebase.json=firebase-service-account-$ENV:latest" \
+    --set-secrets "GOOGLE_MAPS_API_KEY=google-maps-api-key-$ENV:latest" \
+    --set-secrets "GEMINI_API_KEY=gemini-api-key-$ENV:latest" \
+    --set-secrets "ALLOWED_ORIGINS=cors-allowed-origins-$ENV:latest" \
     --allow-unauthenticated \
     --min-instances $MIN_INSTANCES \
     --max-instances $MAX_INSTANCES \
