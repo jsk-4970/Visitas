@@ -30,8 +30,8 @@ WORKDIR /root/
 # Copy binary from builder
 COPY --from=builder /app/bin/api .
 
-# Copy config directory (if exists)
-COPY --from=builder /app/config ./config 2>/dev/null || true
+# Note: Config files are loaded from Secret Manager in Cloud Run
+# No need to copy config directory
 
 # Expose port
 EXPOSE 8080

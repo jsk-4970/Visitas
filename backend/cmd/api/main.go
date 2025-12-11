@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	"github.com/visitas/backend/internal/config"
 	"github.com/visitas/backend/internal/handlers"
+	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/pkg/auth"
 )
 
 func main() {
@@ -34,6 +36,23 @@ func main() {
 	// Initialize context
 	ctx := context.Background()
 
+	// Initialize Firebase client
+	var firebaseClient *auth.FirebaseClient
+	var authMiddleware *middleware.AuthMiddleware
+
+	if cfg.FirebaseConfigPath != "" {
+		firebaseClient, err = auth.NewFirebaseClient(ctx, cfg.FirebaseConfigPath)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Firebase client: %v", err)
+			log.Println("Authentication will be disabled")
+		} else {
+			authMiddleware = middleware.NewAuthMiddleware(firebaseClient)
+			log.Println("Firebase Authentication initialized successfully")
+		}
+	} else {
+		log.Println("Warning: FIREBASE_CONFIG_PATH not set, authentication will be disabled")
+	}
+
 	// Initialize Spanner client
 	spannerRepo, err := repository.NewSpannerRepository(ctx, cfg)
 	if err != nil {
@@ -49,11 +68,11 @@ func main() {
 	r := chi.NewRouter()
 
 	// Middleware
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(chimiddleware.RequestID)
+	r.Use(chimiddleware.RealIP)
+	r.Use(chimiddleware.Logger)
+	r.Use(chimiddleware.Recoverer)
+	r.Use(chimiddleware.Timeout(60 * time.Second))
 
 	// CORS
 	r.Use(cors.Handler(cors.Options{
@@ -66,10 +85,17 @@ func main() {
 	}))
 
 	// Routes
+	// Health check endpoint (public, no auth required)
 	r.Get("/health", healthHandler.Check)
 
+	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Patient routes
+		// Apply authentication middleware if Firebase is configured
+		if authMiddleware != nil {
+			r.Use(authMiddleware.RequireAuth)
+		}
+
+		// Patient routes (protected)
 		r.Route("/patients", func(r chi.Router) {
 			r.Get("/", patientHandler.List)
 			r.Post("/", patientHandler.Create)

@@ -43,11 +43,13 @@ resource "google_project_service" "required_apis" {
     "run.googleapis.com",
     "cloudbuild.googleapis.com",
     "firebase.googleapis.com",
+    "identitytoolkit.googleapis.com", # Firebase Authentication / Identity Platform
+    "secretmanager.googleapis.com",   # Secret Manager for Firebase credentials
     "artifactregistry.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "iam.googleapis.com",
     "iap.googleapis.com",
-    "cloudarmor.googleapis.com",
+    "cloudkms.googleapis.com",
   ])
 
   service            = each.value
@@ -114,9 +116,10 @@ resource "google_storage_bucket" "medical_images" {
 
   uniform_bucket_level_access = true
 
-  encryption {
-    default_kms_key_name = google_kms_crypto_key.storage_key.id
-  }
+  # 開発環境ではデフォルト暗号化を使用（本番環境では CMEK を検討）
+  # encryption {
+  #   default_kms_key_name = google_kms_crypto_key.storage_key.id
+  # }
 
   lifecycle_rule {
     condition {
@@ -203,21 +206,79 @@ resource "google_firestore_database" "main" {
 }
 
 # Organization Policy: リージョン制限（日本国内のみ）
-resource "google_project_organization_policy" "allowed_locations" {
-  project    = var.project_id
-  constraint = "constraints/gcp.resourceLocations"
+# Note: 組織レベルの権限が必要なため、個人プロジェクトではコメントアウト
+# resource "google_project_organization_policy" "allowed_locations" {
+#   project    = var.project_id
+#   constraint = "constraints/gcp.resourceLocations"
+#
+#   list_policy {
+#     allow {
+#       values = [
+#         "in:asia-locations", # Asia全般
+#         "asia-northeast1",   # 東京
+#         "asia-northeast2",   # 大阪
+#       ]
+#     }
+#   }
+#
+#   depends_on = [google_project_service.required_apis]
+# }
 
-  list_policy {
-    allow {
-      values = [
-        "in:asia-locations", # Asia全般
-        "asia-northeast1",   # 東京
-        "asia-northeast2",   # 大阪
-      ]
+# Identity Platform Configuration (Firebase Authentication)
+# Note: Firebase project must be manually set up in Firebase Console first
+# This configuration enables Identity Platform API for the project
+
+# Service Account for Firebase Admin SDK
+resource "google_service_account" "firebase_admin" {
+  account_id   = "firebase-admin-${var.environment}"
+  display_name = "Firebase Admin SDK Service Account (${var.environment})"
+  description  = "Service account for Firebase Admin SDK to manage authentication"
+}
+
+# Grant Firebase Admin role to service account
+resource "google_project_iam_member" "firebase_admin" {
+  project = var.project_id
+  role    = "roles/firebase.admin"
+  member  = "serviceAccount:${google_service_account.firebase_admin.email}"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Create service account key (for local development and Cloud Run)
+resource "google_service_account_key" "firebase_admin_key" {
+  service_account_id = google_service_account.firebase_admin.name
+}
+
+# Store the service account key in Secret Manager for secure access
+resource "google_secret_manager_secret" "firebase_service_account" {
+  secret_id = "firebase-service-account-${var.environment}"
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
     }
   }
 
+  labels = {
+    environment = var.environment
+    project     = "visitas"
+  }
+
   depends_on = [google_project_service.required_apis]
+}
+
+resource "google_secret_manager_secret_version" "firebase_service_account" {
+  secret      = google_secret_manager_secret.firebase_service_account.id
+  secret_data = base64decode(google_service_account_key.firebase_admin_key.private_key)
+}
+
+# Grant Cloud Run service account access to the secret
+resource "google_secret_manager_secret_iam_member" "cloud_run_firebase_secret" {
+  secret_id = google_secret_manager_secret.firebase_service_account.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 # Outputs
@@ -249,4 +310,15 @@ output "artifact_registry_url" {
 output "cloud_run_service_account_email" {
   value       = google_service_account.cloud_run.email
   description = "Cloud Run service account email"
+}
+
+output "firebase_service_account_email" {
+  value       = google_service_account.firebase_admin.email
+  description = "Firebase Admin SDK service account email"
+}
+
+output "firebase_secret_name" {
+  value       = google_secret_manager_secret.firebase_service_account.secret_id
+  description = "Secret Manager secret name for Firebase service account key"
+  sensitive   = true
 }

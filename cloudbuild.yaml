@@ -1,0 +1,130 @@
+# Cloud Build configuration for Visitas Backend
+# This file is used for automated builds triggered by Cloud Build
+
+substitutions:
+  _ENVIRONMENT: dev
+  _REGION: asia-northeast1
+  _SERVICE_NAME: visitas-api-${_ENVIRONMENT}
+  _ARTIFACT_REGISTRY: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/visitas-${_ENVIRONMENT}
+  _SPANNER_INSTANCE: stunning-grin-480914-n1-instance
+  _SPANNER_DATABASE: stunning-grin-480914-n1-db
+
+steps:
+  # Step 1: Run tests
+  - name: 'golang:1.22'
+    id: 'test'
+    dir: 'backend'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "Running tests..."
+        go mod download
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out
+
+  # Step 2: Run linters
+  - name: 'golangci/golangci-lint:v1.55.2'
+    id: 'lint'
+    dir: 'backend'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "Running golangci-lint..."
+        golangci-lint run --timeout=5m || true
+
+  # Step 3: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    dir: 'backend'
+    args:
+      - 'build'
+      - '-t'
+      - '${_ARTIFACT_REGISTRY}/api:${SHORT_SHA}'
+      - '-t'
+      - '${_ARTIFACT_REGISTRY}/api:latest'
+      - '-t'
+      - '${_ARTIFACT_REGISTRY}/api:${_ENVIRONMENT}-latest'
+      - '-f'
+      - 'Dockerfile'
+      - '.'
+
+  # Step 4: Push Docker image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_ARTIFACT_REGISTRY}/api'
+
+  # Step 5: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image=${_ARTIFACT_REGISTRY}/api:${SHORT_SHA}'
+      - '--platform=managed'
+      - '--region=${_REGION}'
+      - '--service-account=visitas-${_ENVIRONMENT}-run@${PROJECT_ID}.iam.gserviceaccount.com'
+      - '--set-env-vars=GCP_PROJECT_ID=${PROJECT_ID},GCP_REGION=${_REGION},SPANNER_INSTANCE=${_SPANNER_INSTANCE},SPANNER_DATABASE=${_SPANNER_DATABASE},ENV=${_ENVIRONMENT},LOG_LEVEL=info'
+      - '--set-secrets=FIREBASE_CONFIG_PATH=firebase-service-account-${_ENVIRONMENT}:latest'
+      - '--allow-unauthenticated'
+      - '--min-instances=0'
+      - '--max-instances=10'
+      - '--cpu=1'
+      - '--memory=512Mi'
+      - '--timeout=60s'
+      - '--concurrency=80'
+      - '--port=8080'
+
+  # Step 6: Test deployment
+  - name: 'gcr.io/cloud-builders/curl'
+    id: 'test-deployment'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "Getting service URL..."
+        SERVICE_URL=$(gcloud run services describe ${_SERVICE_NAME} \
+          --platform managed \
+          --region ${_REGION} \
+          --format 'value(status.url)')
+
+        echo "Testing health endpoint: $SERVICE_URL/health"
+        for i in {1..10}; do
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SERVICE_URL/health)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✅ Health check passed"
+            exit 0
+          fi
+          echo "Waiting for service to be ready... (attempt $i/10)"
+          sleep 5
+        done
+
+        echo "❌ Health check failed"
+        exit 1
+
+# Images to be pushed to Artifact Registry
+images:
+  - '${_ARTIFACT_REGISTRY}/api:${SHORT_SHA}'
+  - '${_ARTIFACT_REGISTRY}/api:latest'
+  - '${_ARTIFACT_REGISTRY}/api:${_ENVIRONMENT}-latest'
+
+# Build options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+  logStreamingOption: STREAM_ON
+
+# Timeout for the entire build
+timeout: '1800s'
+
+# Tags for organizing builds
+tags:
+  - 'visitas'
+  - 'backend'
+  - '${_ENVIRONMENT}'

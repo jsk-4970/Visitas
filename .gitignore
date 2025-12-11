@@ -1,0 +1,166 @@
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE & Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.log
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Go
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+coverage.html
+
+# Go workspace file
+go.work
+
+# Vendor directory (if not using modules)
+vendor/
+
+# Air (Live reload for Go)
+tmp/
+.air.toml.local
+
+# Backend specific
+backend/.env
+backend/.env.local
+backend/bin/
+backend/tmp/
+backend/coverage.out
+backend/coverage.html
+backend/config/firebase-service-account.json
+backend/config/*.json
+
+# Firebase & GCP
+*-firebase-adminsdk-*.json
+service-account*.json
+gcp-key*.json
+firebase-debug.log
+.firebase/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Cloud Build & CI/CD
+.gcloudignore
+cloudbuild-local.yaml
+
+# Docker
+docker-compose.override.yml
+.dockerignore.local
+
+# Mobile (Flutter)
+mobile/.dart_tool/
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.metadata
+mobile/pubspec.lock
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Flutter.podspec
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+mobile/android/.gradle/
+mobile/android/captures/
+mobile/android/local.properties
+mobile/android/key.properties
+
+# Web
+web/node_modules/
+web/.cache/
+web/dist/
+web/build/
+
+# Documentation
+docs/.cache/
+docs/build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Security & Secrets
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+
+# Database dumps
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.backup
+*.bak
+backup/
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon

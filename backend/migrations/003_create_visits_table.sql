@@ -17,10 +17,10 @@ CREATE TABLE Visits (
 ) PRIMARY KEY (visit_id);
 
 -- インデックス: 患者ごとの訪問履歴取得用
-CREATE INDEX idx_visits_patient ON Visits(patient_id, scheduled_at DESC) WHERE deleted = false;
+CREATE INDEX idx_visits_patient ON Visits(patient_id, scheduled_at DESC);
 
 -- インデックス: 医師ごとのスケジュール取得用
-CREATE INDEX idx_visits_doctor_schedule ON Visits(doctor_id, scheduled_at) WHERE deleted = false AND status IN ('scheduled', 'in_progress');
+CREATE INDEX idx_visits_doctor_schedule ON Visits(doctor_id, scheduled_at);
 
 -- インデックス: 日付範囲検索用
-CREATE INDEX idx_visits_date_range ON Visits(scheduled_at) WHERE deleted = false;
+CREATE INDEX idx_visits_date_range ON Visits(scheduled_at);

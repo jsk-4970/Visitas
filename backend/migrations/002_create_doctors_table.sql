@@ -12,4 +12,4 @@ CREATE TABLE Doctors (
 ) PRIMARY KEY (doctor_id);
 
 -- インデックス: メールアドレス検索用（ユニーク制約として機能）
-CREATE UNIQUE INDEX idx_doctors_email ON Doctors(email) WHERE deleted = false;
+CREATE UNIQUE INDEX idx_doctors_email ON Doctors(email);

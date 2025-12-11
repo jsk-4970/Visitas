@@ -24,10 +24,10 @@ CREATE TABLE Patients (
 ) PRIMARY KEY (patient_id);
 
 -- インデックス: 名前検索用
-CREATE INDEX idx_patients_name ON Patients(name_last, name_first) WHERE deleted = false;
+CREATE INDEX idx_patients_name ON Patients(name_last, name_first);
 
 -- インデックス: 住所検索用
-CREATE INDEX idx_patients_address ON Patients(address_prefecture, address_city) WHERE deleted = false;
+CREATE INDEX idx_patients_address ON Patients(address_prefecture, address_city);
 
 -- インデックス: 作成日時ソート用
-CREATE INDEX idx_patients_created_at ON Patients(created_at DESC) WHERE deleted = false;
+CREATE INDEX idx_patients_created_at ON Patients(created_at DESC);
