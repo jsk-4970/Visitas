@@ -56,18 +56,27 @@ resource "google_project_service" "required_apis" {
   disable_on_destroy = false
 }
 
-# Cloud Spanner Instance
+# Cloud Spanner Instance with CMEK encryption
 resource "google_spanner_instance" "main" {
   name             = var.spanner_instance_name
   config           = "regional-${var.region}"
   display_name     = "Visitas ${var.environment} Instance"
   processing_units = var.spanner_processing_units
+
+  # CMEK encryption for enhanced security (3省2ガイドライン準拠)
+  encryption_config {
+    kms_key_name = google_kms_crypto_key.spanner_key.id
+  }
+
   labels = {
     environment = var.environment
     project     = "visitas"
   }
 
-  depends_on = [google_project_service.required_apis]
+  depends_on = [
+    google_project_service.required_apis,
+    google_kms_crypto_key.spanner_key
+  ]
 }
 
 # Cloud Spanner Database
@@ -156,6 +165,24 @@ resource "google_kms_crypto_key" "storage_key" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+# KMS Crypto Key for Spanner (CMEK)
+resource "google_kms_crypto_key" "spanner_key" {
+  name            = "spanner-encryption-key"
+  key_ring        = google_kms_key_ring.main.id
+  rotation_period = "7776000s" # 90 days
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Grant Spanner service account permission to use the KMS key
+resource "google_kms_crypto_key_iam_member" "spanner_key_user" {
+  crypto_key_id = google_kms_crypto_key.spanner_key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-spanner.iam.gserviceaccount.com"
 }
 
 # Artifact Registry for Docker images
@@ -279,6 +306,13 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_firebase_secret" {
   secret_id = google_secret_manager_secret.firebase_service_account.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run service account permission to use KMS for application-level encryption
+resource "google_kms_crypto_key_iam_member" "cloud_run_kms_user" {
+  crypto_key_id = google_kms_crypto_key.spanner_key.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 # Outputs
