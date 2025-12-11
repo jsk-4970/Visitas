@@ -3,7 +3,6 @@
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,19 +17,27 @@ import (
 	"github.com/visitas/backend/internal/handlers"
 	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/auth"
+	"github.com/visitas/backend/pkg/encryption"
+	"github.com/visitas/backend/pkg/logger"
 )
 
 func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
+		logger.Info("No .env file found, using environment variables")
 	}
 
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		logger.Fatal("Failed to load config", err)
+	}
+
+	// Set logger level
+	if cfg.LogLevel == "debug" {
+		logger.SetGlobalLevel(logger.LogLevelDebug)
 	}
 
 	// Initialize context
@@ -43,26 +50,60 @@ func main() {
 	if cfg.FirebaseConfigPath != "" {
 		firebaseClient, err = auth.NewFirebaseClient(ctx, cfg.FirebaseConfigPath)
 		if err != nil {
-			log.Printf("Warning: Failed to initialize Firebase client: %v", err)
-			log.Println("Authentication will be disabled")
+			logger.Warn("Failed to initialize Firebase client - authentication will be disabled", map[string]interface{}{
+				"error": err.Error(),
+			})
 		} else {
 			authMiddleware = middleware.NewAuthMiddleware(firebaseClient)
-			log.Println("Firebase Authentication initialized successfully")
+			logger.Info("Firebase Authentication initialized successfully")
 		}
 	} else {
-		log.Println("Warning: FIREBASE_CONFIG_PATH not set, authentication will be disabled")
+		logger.Warn("FIREBASE_CONFIG_PATH not set - authentication will be disabled")
 	}
 
-	// Initialize Spanner client
+	// Initialize Spanner repository
 	spannerRepo, err := repository.NewSpannerRepository(ctx, cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize Spanner repository: %v", err)
+		logger.Fatal("Failed to initialize Spanner repository", err)
 	}
 	defer spannerRepo.Close()
+	logger.Info("Spanner repository initialized successfully")
+
+	// Initialize KMS encryptor for My Number encryption
+	var kmsEncryptor *encryption.KMSEncryptor
+	kmsProjectID := os.Getenv("KMS_PROJECT_ID")
+	kmsLocation := os.Getenv("KMS_LOCATION")
+	kmsKeyRing := os.Getenv("KMS_KEYRING")
+	kmsKey := os.Getenv("KMS_KEY")
+
+	if kmsProjectID != "" && kmsLocation != "" && kmsKeyRing != "" && kmsKey != "" {
+		kmsEncryptor, err = encryption.NewKMSEncryptor(ctx, kmsProjectID, kmsLocation, kmsKeyRing, kmsKey)
+		if err != nil {
+			logger.Warn("Failed to initialize KMS encryptor - My Number encryption will not be available", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			logger.Info("KMS encryptor initialized successfully")
+		}
+	} else {
+		logger.Warn("KMS configuration not set - My Number encryption will not be available")
+	}
+
+	// Initialize repositories
+	patientRepo := repository.NewPatientRepository(spannerRepo)
+	identifierRepo := repository.NewIdentifierRepository(spannerRepo, kmsEncryptor)
+	assignmentRepo := repository.NewAssignmentRepository(spannerRepo)
+	auditRepo := repository.NewAuditRepository(spannerRepo)
+
+	// Initialize services
+	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
+
+	// Initialize middleware
+	auditMiddleware := middleware.NewAuditLoggerMiddleware(auditRepo)
 
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler()
-	patientHandler := handlers.NewPatientHandler(spannerRepo)
+	patientHandler := handlers.NewPatientHandler(patientService)
+	identifierHandler := handlers.NewIdentifierHandler(identifierRepo, patientRepo, auditMiddleware)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -86,7 +127,10 @@ func main() {
 
 	// Routes
 	// Health check endpoint (public, no auth required)
-	r.Get("/health", healthHandler.Check)
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy"}`))
+	})
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
@@ -95,13 +139,26 @@ func main() {
 			r.Use(authMiddleware.RequireAuth)
 		}
 
+		// Apply audit logging middleware
+		r.Use(auditMiddleware.LogPatientAccess)
+
 		// Patient routes (protected)
 		r.Route("/patients", func(r chi.Router) {
-			r.Get("/", patientHandler.List)
-			r.Post("/", patientHandler.Create)
-			r.Get("/{id}", patientHandler.Get)
-			r.Put("/{id}", patientHandler.Update)
-			r.Delete("/{id}", patientHandler.Delete)
+			r.Get("/", patientHandler.GetMyPatients)        // List my assigned patients
+			r.Post("/", patientHandler.CreatePatient)       // Create patient
+			r.Get("/{id}", patientHandler.GetPatient)       // Get patient by ID
+			r.Put("/{id}", patientHandler.UpdatePatient)    // Update patient
+			r.Delete("/{id}", patientHandler.DeletePatient) // Delete patient (soft delete)
+			r.Post("/{id}/assign", patientHandler.AssignPatientToStaff) // Assign patient to staff
+		})
+
+		// Patient identifier routes (protected)
+		r.Route("/patients/{patient_id}/identifiers", func(r chi.Router) {
+			r.Get("/", identifierHandler.GetIdentifiers)       // List identifiers
+			r.Post("/", identifierHandler.CreateIdentifier)    // Create identifier
+			r.Get("/{id}", identifierHandler.GetIdentifier)    // Get identifier by ID
+			r.Put("/{id}", identifierHandler.UpdateIdentifier) // Update identifier
+			r.Delete("/{id}", identifierHandler.DeleteIdentifier) // Delete identifier
 		})
 	})
 
@@ -117,9 +174,12 @@ func main() {
 
 	// Graceful shutdown
 	go func() {
-		log.Printf("Starting server on %s (env: %s)", addr, cfg.Env)
+		logger.Info("Starting server", map[string]interface{}{
+			"addr": addr,
+			"env":  cfg.Env,
+		})
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			logger.Fatal("Server failed to start", err)
 		}
 	}()
 
@@ -128,14 +188,19 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Fatal("Server forced to shutdown", err)
 	}
 
-	log.Println("Server exited")
+	// Close KMS encryptor if initialized
+	if kmsEncryptor != nil {
+		kmsEncryptor.Close()
+	}
+
+	logger.Info("Server exited")
 }

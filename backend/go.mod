@@ -3,10 +3,12 @@ module github.com/visitas/backend
 go 1.22
 
 require (
+	cloud.google.com/go/kms v1.15.5
 	cloud.google.com/go/spanner v1.56.0
 	firebase.google.com/go/v4 v4.13.0
 	github.com/go-chi/chi/v5 v5.0.11
 	github.com/go-chi/cors v1.2.1
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	google.golang.org/api v0.162.0
 )
