@@ -2,13 +2,14 @@
 
 ## プロジェクト概要
 
-Visitasは、日本の在宅医療（訪問診療）の課題を解決するためのAI駆動型クラウドプラットフォームです。医師の認知負荷を低減し、移動効率を最適化し、カルテ記載業務を自動化することで、医師が患者と向き合う時間を最大化します。
+Visitasは、日本の在宅医療（訪問診療）の課題を解決するためのAI駆動型クラウドプラットフォームです。医師の認知負荷を低減し、移動効率を最適化し、カルテ記載業務と法的書類作成を自動化することで、医師が患者と向き合う時間を最大化します。
 
 ## コアバリュー
 
 1. **Ambient Clinical Intelligence**: Gemini 1.5 Proによる診療会話の自動構造化（SOAP形式）
-2. **Dynamic Logistics**: Google Maps Route Optimization APIによる訪問ルートの最適化
-3. **Secure Mobility**: オフラインファースト設計と3省2ガイドライン準拠のセキュリティ
+2. **AI-Powered Documentation**: 生成AIによる法的書類（訪問看護指示書等）の自動下書き作成
+3. **Dynamic Logistics**: Google Maps Route Optimization APIによる訪問ルートの最適化
+4. **Secure Mobility**: オフラインファースト設計と3省2ガイドライン準拠のセキュリティ
 
 ## 技術スタック
 
@@ -22,6 +23,7 @@ Visitasは、日本の在宅医療（訪問診療）の課題を解決するた�
 - **AI/ML**: Vertex AI (Gemini 1.5 Pro/Flash)
 - **ストレージ**: Cloud Storage (音声、画像、バックアップ)
 - **依存管理**: Go Modules
+- **文書生成**: gofpdf / excelize (PDF/Excel生成)
 
 ### フロントエンド
 - **モバイル**: Flutter (iOS/Android)
@@ -65,6 +67,12 @@ Visitas/
 │   ├── go.mod
 │   ├── go.sum
 │   ├── Dockerfile
+│   ├── document_templates/  # 法的書類テンプレート
+│   │   ├── nursing_instruction.json
+│   │   ├── home_care_instruction.json
+│   │   ├── special_nursing_instruction.json
+│   │   ├── medication_instruction.json
+│   │   └── point_instruction.json
 │   └── .air.toml       # ホットリロード設定
 ├── mobile/              # Flutterモバイルアプリ
 │   ├── lib/
@@ -134,8 +142,30 @@ Visitas/
 - 基本的な移動距離計算
 
 ### Phase 2: AI Integration (4-6ヶ月)
-- 音声録音・アップロード
-- Gemini 1.5 Proによる自動SOAP生成
+
+#### Sprint 6: 法的書類AI生成（高優先度） (Week 13-16)
+- **対象書類**: 訪問看護指示書、居宅療養指導書、特別訪問看護指示書、訪問薬剤管理指導書、点的指示書
+- **書類テンプレート設計**: JSON形式で各書類の構造定義
+- **データ統合API**:
+  - Spannerから患者基本情報（氏名、生年月日、要介護度）を取得
+  - 過去1ヶ月分の訪問ログ、バイタルデータ、構造化された雑談データを取得
+- **Gemini統合**:
+  - プロンプトエンジニアリング（「訪問看護指示書の『病状・治療状態』欄の下書きを作成」等）
+  - グラウンディング機能（生成文の根拠となったログへのリンク表示）
+  - 医療専門職向けの適切な文体制御
+- **出力機能**:
+  - PDF生成（gofpdf使用）
+  - Excel生成（excelize使用）
+  - テンプレートへの動的データ埋め込み
+- **編集・承認UI**（Web管理画面）:
+  - AI生成下書きの表示
+  - インライン編集機能
+  - 参照元データの監査ビュー
+  - 最終承認ワークフロー
+
+#### Sprint 7: SOAP自動生成 (Week 17-20)
+- 音声録音・アップロード機能
+- Gemini 1.5 Proによる診療会話の自動SOAP生成
 - AIサマリー確認・修正UI
 - プロンプトエンジニアリング最適化
 
@@ -293,6 +323,42 @@ export LOG_LEVEL=debug
 3. `lib/services/`にAPI通信ロジックを実装
 4. `lib/providers/`に状態管理（Riverpod）を実装
 5. ルーティング（GoRouter）を設定
+
+### 法的書類テンプレートの追加
+
+1. `backend/document_templates/`にJSON形式でテンプレート定義を作成
+   ```json
+   {
+     "document_type": "nursing_instruction",
+     "display_name": "訪問看護指示書",
+     "sections": [
+       {
+         "field": "patient_info",
+         "label": "患者情報",
+         "source": "spanner.patients",
+         "fields": ["name", "birth_date", "care_level"]
+       },
+       {
+         "field": "medical_condition",
+         "label": "病状・治療状態",
+         "source": "gemini.summary",
+         "prompt": "過去1ヶ月の訪問記録とバイタルデータに基づき、患者の病状と治療状態を200文字以内で要約してください。医療専門職向けの文体で、断定的表現は避けること。"
+       },
+       {
+         "field": "nursing_plan",
+         "label": "看護計画",
+         "source": "gemini.summary",
+         "prompt": "訪問看護で実施すべき内容を具体的に記載してください。"
+       }
+     ],
+     "output_formats": ["pdf", "excel"]
+   }
+   ```
+2. `internal/ai/prompts/`にプロンプトテンプレートを追加
+3. `internal/services/document_generator.go`にドキュメント生成ロジックを実装
+4. `pkg/pdfgen/`または`pkg/excelgen/`に出力ロジックを実装
+5. `internal/handlers/documents.go`にHTTPハンドラーを実装
+6. API仕様を`docs/API_SPEC.md`に追加
 
 ## デプロイ
 
