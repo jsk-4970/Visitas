@@ -1,0 +1,716 @@
+openapi: 3.1.0
+info:
+  title: Visitas API
+  version: 1.0.0
+  description: |
+    在宅医療特化型AIプラットフォーム「Visitas」のREST API仕様書
+
+    ## 概要
+    - **ベースURL**: `https://api.visitas.app/v1`
+    - **認証方式**: Firebase Authentication (Bearer Token)
+    - **レート制限**: 1000リクエスト/時
+
+    ## セキュリティ
+    - すべてのエンドポイントはHTTPS必須
+    - 3省2ガイドライン準拠の医療情報保護
+    - CMEK暗号化によるデータ保存
+
+  contact:
+    name: Visitas API Support
+    email: api-support@visitas.app
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.visitas.app/v1
+    description: Production
+  - url: https://staging-api.visitas.app/v1
+    description: Staging
+  - url: http://localhost:8080/v1
+    description: Local Development
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Patients
+    description: 患者マスターデータ管理
+  - name: Patient Identifiers
+    description: 患者識別子管理 (マイナンバー、保険証番号等)
+  - name: Social Profiles
+    description: 社会的背景・ナラティブ情報
+  - name: Coverages
+    description: 保険情報管理
+  - name: Medical Conditions
+    description: 病名・既往歴管理
+  - name: Allergies
+    description: アレルギー・副作用歴管理
+  - name: Observations
+    description: バイタルサイン・ADL評価
+  - name: Care Plans
+    description: ケア計画管理
+  - name: ACP
+    description: Advance Care Planning (人生会議)
+  - name: Medications
+    description: 処方オーダー管理
+  - name: Visit Schedules
+    description: 訪問スケジュール管理
+  - name: Route Optimization
+    description: ルート最適化
+  - name: Health
+    description: ヘルスチェック
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: ヘルスチェック
+      description: APIサーバーの稼働状況を確認
+      security: []
+      responses:
+        '200':
+          description: サーバー正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  /patients:
+    get:
+      tags:
+        - Patients
+      summary: 患者一覧取得
+      description: |
+        担当患者の一覧を取得します。
+        Row-Level Securityにより、認証ユーザーに割り当てられた患者のみ取得可能。
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: active
+          in: query
+          description: アクティブな患者のみ取得
+          schema:
+            type: boolean
+            default: true
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name_kana, birth_date, created_at]
+            default: name_kana
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Patient'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Patients
+      summary: 患者登録
+      description: 新規患者を登録します
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /patients/{patientId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Patients
+      summary: 患者詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Patients
+      summary: 患者情報更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Patients
+      summary: 患者削除 (論理削除)
+      description: |
+        患者データを論理削除します。
+        医療法に基づき、物理削除は禁止されています。
+      responses:
+        '204':
+          description: 削除成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /patients/{patientId}/social-profiles:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Social Profiles
+      summary: 社会的背景取得
+      description: |
+        患者の社会的背景情報(Subjective data)を取得します。
+        - 生活状況 (独居、家族同居等)
+        - キーパーソン情報
+        - 介護者負担評価
+        - 宗教的・文化的配慮事項
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SocialProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Social Profiles
+      summary: 社会的背景登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialProfileCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialProfile'
+
+  /patients/{patientId}/coverages:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Coverages
+      summary: 保険情報一覧取得
+      description: |
+        患者の保険情報を取得します。
+        - 医療保険
+        - 介護保険
+        - 公費負担
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [medical, long_term_care, public_expense]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, cancelled, draft]
+            default: active
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Coverage'
+
+    post:
+      tags:
+        - Coverages
+      summary: 保険情報登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Coverage'
+
+  /patients/{patientId}/observations:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Observations
+      summary: バイタルサイン・評価一覧取得
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Observation'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase ID Token
+
+  parameters:
+    PatientId:
+      name: patientId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 患者ID (UUID v4)
+
+  schemas:
+    Patient:
+      type: object
+      required:
+        - patient_id
+        - name
+        - birth_date
+        - gender
+      properties:
+        patient_id:
+          type: string
+          format: uuid
+          description: 患者ID
+        name:
+          $ref: '#/components/schemas/HumanName'
+        birth_date:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        blood_type:
+          type: string
+          enum: [A+, A-, B+, B-, O+, O-, AB+, AB-]
+        contact_points:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactPoint'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        photo_url:
+          type: string
+          format: uri
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    HumanName:
+      type: object
+      required:
+        - family
+        - given
+        - kana
+      properties:
+        family:
+          type: string
+          example: 山田
+        given:
+          type: string
+          example: 太郎
+        kana:
+          type: string
+          example: ヤマダ タロウ
+        previous_names:
+          type: array
+          items:
+            type: object
+            properties:
+              family:
+                type: string
+              given:
+                type: string
+              period_end:
+                type: string
+                format: date
+              change_reason:
+                type: string
+
+    ContactPoint:
+      type: object
+      properties:
+        system:
+          type: string
+          enum: [phone, email, fax]
+        value:
+          type: string
+        use:
+          type: string
+          enum: [home, work, mobile]
+        rank:
+          type: integer
+          minimum: 1
+
+    Address:
+      type: object
+      properties:
+        use:
+          type: string
+          enum: [home, work, temp, facility]
+        postal_code:
+          type: string
+        prefecture:
+          type: string
+        city:
+          type: string
+        line:
+          type: string
+        geolocation:
+          $ref: '#/components/schemas/GeoLocation'
+
+    GeoLocation:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+
+    SocialProfile:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        recorded_at:
+          type: string
+          format: date-time
+        author_id:
+          type: string
+          format: uuid
+        content:
+          type: object
+          description: JSONB構造の社会的背景データ
+        data_sensitivity:
+          type: string
+          enum: [confidential, highly_confidential]
+
+    Coverage:
+      type: object
+      properties:
+        coverage_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        insurance_type:
+          type: string
+          enum: [medical, long_term_care, public_expense]
+        payer_organization:
+          type: string
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, cancelled, draft, entered-in-error]
+        details:
+          type: object
+          description: 保険詳細(JSONB)
+
+    Observation:
+      type: object
+      properties:
+        observation_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
+        code:
+          type: object
+        effective_datetime:
+          type: string
+          format: date-time
+        value:
+          type: object
+        interpretation:
+          type: string
+          enum: [normal, high, low, critical]
+
+    PatientCreateRequest:
+      type: object
+      required:
+        - name
+        - birth_date
+        - gender
+      properties:
+        name:
+          $ref: '#/components/schemas/HumanName'
+        birth_date:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        blood_type:
+          type: string
+        contact_points:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactPoint'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+
+    PatientUpdateRequest:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/HumanName'
+        contact_points:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactPoint'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        photo_url:
+          type: string
+          format: uri
+        active:
+          type: boolean
+
+    SocialProfileCreateRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: object
+          description: 社会的背景の詳細(JSONB)
+
+    CoverageCreateRequest:
+      type: object
+      required:
+        - insurance_type
+        - valid_from
+        - details
+      properties:
+        insurance_type:
+          type: string
+          enum: [medical, long_term_care, public_expense]
+        payer_organization:
+          type: string
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type: string
+          format: date
+        details:
+          type: object
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  responses:
+    BadRequest:
+      description: リクエスト不正
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: bad_request
+            message: Invalid request parameters
+
+    Unauthorized:
+      description: 認証エラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: unauthorized
+            message: Invalid or missing authentication token
+
+    NotFound:
+      description: リソースが見つかりません
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: not_found
+            message: Resource not found
+
+    InternalServerError:
+      description: サーバーエラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: internal_server_error
+            message: An unexpected error occurred

@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(tree:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(__NEW_LINE__ cd migrations)",
+      "Bash(echo '=== 現在のマイグレーションファイル ===' ls -1 *.sql)",
+      "Bash(echo -e '\\n=== アーカイブ後のファイル ===' ls -1 *.sql)",
+      "Bash(__NEW_LINE__ cd /Users/yukinaribaba/Desktop/Visitas)",
+      "Bash(ls:*)",
+      "Bash(__NEW_LINE__ cd backend/migrations)",
+      "Bash(echo \"=== 重複ファイルを確認 ===\" ls -1 *.sql)",
+      "Bash(do echo '--- $num ---' ls -lh $num_*.sql)"
     ]
   }
 }
