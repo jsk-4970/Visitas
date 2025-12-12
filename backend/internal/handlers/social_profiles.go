@@ -8,21 +8,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
-	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
 )
 
 // SocialProfileHandler handles social profile-related HTTP requests
 type SocialProfileHandler struct {
-	socialProfileRepo *repository.SocialProfileRepository
-	patientRepo       *repository.PatientRepository
+	socialProfileService *services.SocialProfileService
 }
 
 // NewSocialProfileHandler creates a new social profile handler
-func NewSocialProfileHandler(socialProfileRepo *repository.SocialProfileRepository, patientRepo *repository.PatientRepository) *SocialProfileHandler {
+func NewSocialProfileHandler(socialProfileService *services.SocialProfileService) *SocialProfileHandler {
 	return &SocialProfileHandler{
-		socialProfileRepo: socialProfileRepo,
-		patientRepo:       patientRepo,
+		socialProfileService: socialProfileService,
 	}
 }
 
@@ -53,22 +51,14 @@ func (h *SocialProfileHandler) CreateSocialProfile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Verify patient exists
-	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
+	profile, err := h.socialProfileService.CreateSocialProfile(r.Context(), &req, userID)
 	if err != nil {
-		if err.Error() == "patient not found" {
-			respondError(w, http.StatusNotFound, "Patient not found")
+		if err.Error() == "access denied: you do not have permission to create social profile for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
 		} else {
-			logger.ErrorContext(r.Context(), "Failed to verify patient", err)
-			respondError(w, http.StatusInternalServerError, "Failed to verify patient")
+			logger.ErrorContext(r.Context(), "Failed to create social profile", err)
+			respondError(w, http.StatusInternalServerError, "Failed to create social profile")
 		}
-		return
-	}
-
-	profile, err := h.socialProfileRepo.CreateSocialProfile(r.Context(), &req, userID)
-	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to create social profile", err)
-		respondError(w, http.StatusInternalServerError, "Failed to create social profile")
 		return
 	}
 
@@ -84,6 +74,13 @@ func (h *SocialProfileHandler) GetSocialProfiles(w http.ResponseWriter, r *http.
 	patientID := chi.URLParam(r, "patient_id")
 	if patientID == "" {
 		respondError(w, http.StatusBadRequest, "Patient ID is required")
+		return
+	}
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
@@ -106,7 +103,7 @@ func (h *SocialProfileHandler) GetSocialProfiles(w http.ResponseWriter, r *http.
 
 	if currentOnly {
 		// Get only the current profile
-		currentProfile, err := h.socialProfileRepo.GetCurrentSocialProfile(r.Context(), patientID)
+		currentProfile, err := h.socialProfileService.GetCurrentSocialProfile(r.Context(), patientID, userID)
 		if err != nil {
 			if err.Error() == "no current social profile found" {
 				respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -116,6 +113,9 @@ func (h *SocialProfileHandler) GetSocialProfiles(w http.ResponseWriter, r *http.
 					"per_page": perPage,
 				})
 				return
+			} else if err.Error() == "access denied: you do not have permission to view social profile for this patient" {
+				respondError(w, http.StatusForbidden, err.Error())
+				return
 			}
 			logger.ErrorContext(r.Context(), "Failed to get current social profile", err)
 			respondError(w, http.StatusInternalServerError, "Failed to get current social profile")
@@ -124,10 +124,14 @@ func (h *SocialProfileHandler) GetSocialProfiles(w http.ResponseWriter, r *http.
 		profiles = []*models.PatientSocialProfile{currentProfile}
 	} else {
 		// Get all profiles (versioned history)
-		profiles, err = h.socialProfileRepo.GetSocialProfileHistory(r.Context(), patientID)
+		profiles, err = h.socialProfileService.GetSocialProfileHistory(r.Context(), patientID, userID)
 		if err != nil {
-			logger.ErrorContext(r.Context(), "Failed to get social profiles", err)
-			respondError(w, http.StatusInternalServerError, "Failed to get social profiles")
+			if err.Error() == "access denied: you do not have permission to view social profile history for this patient" {
+				respondError(w, http.StatusForbidden, err.Error())
+			} else {
+				logger.ErrorContext(r.Context(), "Failed to get social profiles", err)
+				respondError(w, http.StatusInternalServerError, "Failed to get social profiles")
+			}
 			return
 		}
 	}
@@ -148,9 +152,18 @@ func (h *SocialProfileHandler) GetSocialProfile(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	profile, err := h.socialProfileRepo.GetSocialProfileByID(r.Context(), profileID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	profile, err := h.socialProfileService.GetSocialProfile(r.Context(), profileID, userID)
 	if err != nil {
-		if err.Error() == "social profile not found" {
+		if err.Error() == "access denied: you do not have permission to view this social profile" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "social profile not found" {
 			respondError(w, http.StatusNotFound, "Social profile not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to get social profile", err)
@@ -186,9 +199,11 @@ func (h *SocialProfileHandler) UpdateSocialProfile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	profile, err := h.socialProfileRepo.UpdateSocialProfile(r.Context(), profileID, &req, userID)
+	profile, err := h.socialProfileService.UpdateSocialProfile(r.Context(), profileID, &req, userID)
 	if err != nil {
-		if err.Error() == "social profile not found" {
+		if err.Error() == "access denied: you do not have permission to update this social profile" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "social profile not found" {
 			respondError(w, http.StatusNotFound, "Social profile not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to update social profile", err)
@@ -219,9 +234,11 @@ func (h *SocialProfileHandler) DeleteSocialProfile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	err := h.socialProfileRepo.DeleteSocialProfile(r.Context(), profileID, userID)
+	err := h.socialProfileService.DeleteSocialProfile(r.Context(), profileID, userID)
 	if err != nil {
-		if err.Error() == "social profile not found" {
+		if err.Error() == "access denied: you do not have permission to delete this social profile" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "social profile not found" {
 			respondError(w, http.StatusNotFound, "Social profile not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to delete social profile", err)

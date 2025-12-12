@@ -7,21 +7,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
-	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
 )
 
 // AllergyIntoleranceHandler handles allergy intolerance-related HTTP requests
 type AllergyIntoleranceHandler struct {
-	allergyRepo *repository.AllergyIntoleranceRepository
-	patientRepo *repository.PatientRepository
+	allergyService *services.AllergyIntoleranceService
 }
 
 // NewAllergyIntoleranceHandler creates a new allergy intolerance handler
-func NewAllergyIntoleranceHandler(allergyRepo *repository.AllergyIntoleranceRepository, patientRepo *repository.PatientRepository) *AllergyIntoleranceHandler {
+func NewAllergyIntoleranceHandler(allergyService *services.AllergyIntoleranceService) *AllergyIntoleranceHandler {
 	return &AllergyIntoleranceHandler{
-		allergyRepo: allergyRepo,
-		patientRepo: patientRepo,
+		allergyService: allergyService,
 	}
 }
 
@@ -52,22 +50,14 @@ func (h *AllergyIntoleranceHandler) CreateAllergyIntolerance(w http.ResponseWrit
 		return
 	}
 
-	// Verify patient exists
-	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
+	allergy, err := h.allergyService.CreateAllergy(r.Context(), &req, userID)
 	if err != nil {
-		if err.Error() == "patient not found" {
-			respondError(w, http.StatusNotFound, "Patient not found")
+		if err.Error() == "access denied: you do not have permission to add allergies for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
 		} else {
-			logger.ErrorContext(r.Context(), "Failed to verify patient", err)
-			respondError(w, http.StatusInternalServerError, "Failed to verify patient")
+			logger.ErrorContext(r.Context(), "Failed to create allergy intolerance", err)
+			respondError(w, http.StatusInternalServerError, "Failed to create allergy intolerance")
 		}
-		return
-	}
-
-	allergy, err := h.allergyRepo.CreateAllergy(r.Context(), &req, userID)
-	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to create allergy intolerance", err)
-		respondError(w, http.StatusInternalServerError, "Failed to create allergy intolerance")
 		return
 	}
 
@@ -86,6 +76,13 @@ func (h *AllergyIntoleranceHandler) GetAllergyIntolerances(w http.ResponseWriter
 		return
 	}
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
 	// Parse query parameters
 	activeOnly := r.URL.Query().Get("active_only") == "true"
 	medicationOnly := r.URL.Query().Get("medication_only") == "true"
@@ -95,18 +92,22 @@ func (h *AllergyIntoleranceHandler) GetAllergyIntolerances(w http.ResponseWriter
 
 	if medicationOnly {
 		// Get only medication allergies
-		allergies, err = h.allergyRepo.GetMedicationAllergies(r.Context(), patientID)
+		allergies, err = h.allergyService.GetMedicationAllergies(r.Context(), patientID, userID)
 	} else if activeOnly {
 		// Get only active allergies
-		allergies, err = h.allergyRepo.GetActiveAllergies(r.Context(), patientID)
+		allergies, err = h.allergyService.GetActiveAllergies(r.Context(), patientID, userID)
 	} else {
 		// Get all allergies
-		allergies, err = h.allergyRepo.GetAllergiesByPatient(r.Context(), patientID)
+		allergies, err = h.allergyService.GetAllergiesByPatient(r.Context(), patientID, userID)
 	}
 
 	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to get allergy intolerances", err)
-		respondError(w, http.StatusInternalServerError, "Failed to get allergy intolerances")
+		if err.Error() == "access denied: you do not have permission to view allergies for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else {
+			logger.ErrorContext(r.Context(), "Failed to get allergy intolerances", err)
+			respondError(w, http.StatusInternalServerError, "Failed to get allergy intolerances")
+		}
 		return
 	}
 
@@ -124,9 +125,18 @@ func (h *AllergyIntoleranceHandler) GetAllergyIntolerance(w http.ResponseWriter,
 		return
 	}
 
-	allergy, err := h.allergyRepo.GetAllergyByID(r.Context(), allergyID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	allergy, err := h.allergyService.GetAllergy(r.Context(), allergyID, userID)
 	if err != nil {
-		if err.Error() == "allergy intolerance not found" {
+		if err.Error() == "access denied: you do not have permission to view this allergy" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "allergy not found" {
 			respondError(w, http.StatusNotFound, "Allergy intolerance not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to get allergy intolerance", err)
@@ -162,9 +172,11 @@ func (h *AllergyIntoleranceHandler) UpdateAllergyIntolerance(w http.ResponseWrit
 		return
 	}
 
-	allergy, err := h.allergyRepo.UpdateAllergy(r.Context(), allergyID, &req, userID)
+	allergy, err := h.allergyService.UpdateAllergy(r.Context(), allergyID, &req, userID)
 	if err != nil {
-		if err.Error() == "allergy intolerance not found" {
+		if err.Error() == "access denied: you do not have permission to update this allergy" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "allergy not found" {
 			respondError(w, http.StatusNotFound, "Allergy intolerance not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to update allergy intolerance", err)
@@ -195,9 +207,11 @@ func (h *AllergyIntoleranceHandler) DeleteAllergyIntolerance(w http.ResponseWrit
 		return
 	}
 
-	err := h.allergyRepo.DeleteAllergy(r.Context(), allergyID, userID)
+	err := h.allergyService.DeleteAllergy(r.Context(), allergyID, userID)
 	if err != nil {
-		if err.Error() == "allergy intolerance not found" {
+		if err.Error() == "access denied: you do not have permission to delete this allergy" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "allergy not found" {
 			respondError(w, http.StatusNotFound, "Allergy intolerance not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to delete allergy intolerance", err)

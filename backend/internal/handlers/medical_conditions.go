@@ -7,21 +7,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
-	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
 )
 
 // MedicalConditionHandler handles medical condition-related HTTP requests
 type MedicalConditionHandler struct {
-	conditionRepo *repository.MedicalConditionRepository
-	patientRepo   *repository.PatientRepository
+	conditionService *services.MedicalConditionService
 }
 
 // NewMedicalConditionHandler creates a new medical condition handler
-func NewMedicalConditionHandler(conditionRepo *repository.MedicalConditionRepository, patientRepo *repository.PatientRepository) *MedicalConditionHandler {
+func NewMedicalConditionHandler(conditionService *services.MedicalConditionService) *MedicalConditionHandler {
 	return &MedicalConditionHandler{
-		conditionRepo: conditionRepo,
-		patientRepo:   patientRepo,
+		conditionService: conditionService,
 	}
 }
 
@@ -52,22 +50,14 @@ func (h *MedicalConditionHandler) CreateMedicalCondition(w http.ResponseWriter, 
 		return
 	}
 
-	// Verify patient exists
-	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
+	condition, err := h.conditionService.CreateCondition(r.Context(), &req, userID)
 	if err != nil {
-		if err.Error() == "patient not found" {
-			respondError(w, http.StatusNotFound, "Patient not found")
+		if err.Error() == "access denied: you do not have permission to add conditions for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
 		} else {
-			logger.ErrorContext(r.Context(), "Failed to verify patient", err)
-			respondError(w, http.StatusInternalServerError, "Failed to verify patient")
+			logger.ErrorContext(r.Context(), "Failed to create medical condition", err)
+			respondError(w, http.StatusInternalServerError, "Failed to create medical condition")
 		}
-		return
-	}
-
-	condition, err := h.conditionRepo.CreateCondition(r.Context(), &req, userID)
-	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to create medical condition", err)
-		respondError(w, http.StatusInternalServerError, "Failed to create medical condition")
 		return
 	}
 
@@ -86,6 +76,13 @@ func (h *MedicalConditionHandler) GetMedicalConditions(w http.ResponseWriter, r 
 		return
 	}
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
 	// Parse query parameters
 	activeOnly := r.URL.Query().Get("active_only") == "true"
 
@@ -94,15 +91,19 @@ func (h *MedicalConditionHandler) GetMedicalConditions(w http.ResponseWriter, r 
 
 	if activeOnly {
 		// Get only active conditions
-		conditions, err = h.conditionRepo.GetActiveConditions(r.Context(), patientID)
+		conditions, err = h.conditionService.GetActiveConditions(r.Context(), patientID, userID)
 	} else {
 		// Get all conditions
-		conditions, err = h.conditionRepo.GetConditionsByPatient(r.Context(), patientID)
+		conditions, err = h.conditionService.GetConditionsByPatient(r.Context(), patientID, userID)
 	}
 
 	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to get medical conditions", err)
-		respondError(w, http.StatusInternalServerError, "Failed to get medical conditions")
+		if err.Error() == "access denied: you do not have permission to view conditions for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else {
+			logger.ErrorContext(r.Context(), "Failed to get medical conditions", err)
+			respondError(w, http.StatusInternalServerError, "Failed to get medical conditions")
+		}
 		return
 	}
 
@@ -120,9 +121,18 @@ func (h *MedicalConditionHandler) GetMedicalCondition(w http.ResponseWriter, r *
 		return
 	}
 
-	condition, err := h.conditionRepo.GetConditionByID(r.Context(), conditionID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	condition, err := h.conditionService.GetCondition(r.Context(), conditionID, userID)
 	if err != nil {
-		if err.Error() == "medical condition not found" {
+		if err.Error() == "access denied: you do not have permission to view this condition" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "condition not found" {
 			respondError(w, http.StatusNotFound, "Medical condition not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to get medical condition", err)
@@ -158,9 +168,11 @@ func (h *MedicalConditionHandler) UpdateMedicalCondition(w http.ResponseWriter, 
 		return
 	}
 
-	condition, err := h.conditionRepo.UpdateCondition(r.Context(), conditionID, &req, userID)
+	condition, err := h.conditionService.UpdateCondition(r.Context(), conditionID, &req, userID)
 	if err != nil {
-		if err.Error() == "medical condition not found" {
+		if err.Error() == "access denied: you do not have permission to update this condition" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "condition not found" {
 			respondError(w, http.StatusNotFound, "Medical condition not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to update medical condition", err)
@@ -191,9 +203,11 @@ func (h *MedicalConditionHandler) DeleteMedicalCondition(w http.ResponseWriter, 
 		return
 	}
 
-	err := h.conditionRepo.DeleteCondition(r.Context(), conditionID, userID)
+	err := h.conditionService.DeleteCondition(r.Context(), conditionID, userID)
 	if err != nil {
-		if err.Error() == "medical condition not found" {
+		if err.Error() == "access denied: you do not have permission to delete this condition" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "condition not found" {
 			respondError(w, http.StatusNotFound, "Medical condition not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to delete medical condition", err)

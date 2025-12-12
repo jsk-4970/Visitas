@@ -101,6 +101,10 @@ func main() {
 
 	// Initialize services
 	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
+	medicalConditionService := services.NewMedicalConditionService(medicalConditionRepo, patientRepo)
+	allergyIntoleranceService := services.NewAllergyIntoleranceService(allergyIntoleranceRepo, patientRepo)
+	socialProfileService := services.NewSocialProfileService(socialProfileRepo, patientRepo)
+	coverageService := services.NewCoverageService(coverageRepo, patientRepo)
 
 	// Initialize middleware
 	auditMiddleware := middleware.NewAuditLoggerMiddleware(auditRepo)
@@ -108,10 +112,10 @@ func main() {
 	// Initialize handlers
 	patientHandler := handlers.NewPatientHandler(patientService)
 	identifierHandler := handlers.NewIdentifierHandler(identifierRepo, patientRepo, auditMiddleware)
-	socialProfileHandler := handlers.NewSocialProfileHandler(socialProfileRepo, patientRepo)
-	coverageHandler := handlers.NewCoverageHandler(coverageRepo, patientRepo)
-	medicalConditionHandler := handlers.NewMedicalConditionHandler(medicalConditionRepo, patientRepo)
-	allergyIntoleranceHandler := handlers.NewAllergyIntoleranceHandler(allergyIntoleranceRepo, patientRepo)
+	socialProfileHandler := handlers.NewSocialProfileHandler(socialProfileService)
+	coverageHandler := handlers.NewCoverageHandler(coverageService)
+	medicalConditionHandler := handlers.NewMedicalConditionHandler(medicalConditionService)
+	allergyIntoleranceHandler := handlers.NewAllergyIntoleranceHandler(allergyIntoleranceService)
 
 	// Setup router
 	r := chi.NewRouter()

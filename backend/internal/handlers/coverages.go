@@ -7,21 +7,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
-	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
 )
 
 // CoverageHandler handles insurance coverage-related HTTP requests
 type CoverageHandler struct {
-	coverageRepo *repository.CoverageRepository
-	patientRepo  *repository.PatientRepository
+	coverageService *services.CoverageService
 }
 
 // NewCoverageHandler creates a new coverage handler
-func NewCoverageHandler(coverageRepo *repository.CoverageRepository, patientRepo *repository.PatientRepository) *CoverageHandler {
+func NewCoverageHandler(coverageService *services.CoverageService) *CoverageHandler {
 	return &CoverageHandler{
-		coverageRepo: coverageRepo,
-		patientRepo:  patientRepo,
+		coverageService: coverageService,
 	}
 }
 
@@ -52,22 +50,14 @@ func (h *CoverageHandler) CreateCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Verify patient exists
-	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
+	coverage, err := h.coverageService.CreateCoverage(r.Context(), &req, userID)
 	if err != nil {
-		if err.Error() == "patient not found" {
-			respondError(w, http.StatusNotFound, "Patient not found")
+		if err.Error() == "access denied: you do not have permission to create coverage for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
 		} else {
-			logger.ErrorContext(r.Context(), "Failed to verify patient", err)
-			respondError(w, http.StatusInternalServerError, "Failed to verify patient")
+			logger.ErrorContext(r.Context(), "Failed to create coverage", err)
+			respondError(w, http.StatusInternalServerError, "Failed to create coverage")
 		}
-		return
-	}
-
-	coverage, err := h.coverageRepo.CreateCoverage(r.Context(), &req, userID)
-	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to create coverage", err)
-		respondError(w, http.StatusInternalServerError, "Failed to create coverage")
 		return
 	}
 
@@ -86,6 +76,13 @@ func (h *CoverageHandler) GetCoverages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
 	// Parse query parameters
 	insuranceType := r.URL.Query().Get("insurance_type")
 	activeOnly := r.URL.Query().Get("active_only") == "true"
@@ -95,18 +92,22 @@ func (h *CoverageHandler) GetCoverages(w http.ResponseWriter, r *http.Request) {
 
 	if insuranceType != "" {
 		// Filter by insurance type
-		coverages, err = h.coverageRepo.GetCoveragesByPatientAndType(r.Context(), patientID, insuranceType)
+		coverages, err = h.coverageService.GetCoveragesByPatientAndType(r.Context(), patientID, insuranceType, userID)
 	} else if activeOnly {
 		// Get only active coverages
-		coverages, err = h.coverageRepo.GetActiveCoverages(r.Context(), patientID)
+		coverages, err = h.coverageService.GetActiveCoverages(r.Context(), patientID, userID)
 	} else {
 		// Get all coverages
-		coverages, err = h.coverageRepo.GetCoveragesByPatient(r.Context(), patientID)
+		coverages, err = h.coverageService.GetCoveragesByPatient(r.Context(), patientID, userID)
 	}
 
 	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to get coverages", err)
-		respondError(w, http.StatusInternalServerError, "Failed to get coverages")
+		if err.Error() == "access denied: you do not have permission to view coverages for this patient" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else {
+			logger.ErrorContext(r.Context(), "Failed to get coverages", err)
+			respondError(w, http.StatusInternalServerError, "Failed to get coverages")
+		}
 		return
 	}
 
@@ -124,9 +125,18 @@ func (h *CoverageHandler) GetCoverage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coverage, err := h.coverageRepo.GetCoverageByID(r.Context(), coverageID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	coverage, err := h.coverageService.GetCoverage(r.Context(), coverageID, userID)
 	if err != nil {
-		if err.Error() == "coverage not found" {
+		if err.Error() == "access denied: you do not have permission to view this coverage" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to get coverage", err)
@@ -162,9 +172,11 @@ func (h *CoverageHandler) UpdateCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	coverage, err := h.coverageRepo.UpdateCoverage(r.Context(), coverageID, &req, userID)
+	coverage, err := h.coverageService.UpdateCoverage(r.Context(), coverageID, &req, userID)
 	if err != nil {
-		if err.Error() == "coverage not found" {
+		if err.Error() == "access denied: you do not have permission to update this coverage" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to update coverage", err)
@@ -195,9 +207,11 @@ func (h *CoverageHandler) DeleteCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := h.coverageRepo.DeleteCoverage(r.Context(), coverageID, userID)
+	err := h.coverageService.DeleteCoverage(r.Context(), coverageID, userID)
 	if err != nil {
-		if err.Error() == "coverage not found" {
+		if err.Error() == "access denied: you do not have permission to delete this coverage" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to delete coverage", err)
@@ -226,9 +240,11 @@ func (h *CoverageHandler) VerifyCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := h.coverageRepo.VerifyCoverage(r.Context(), coverageID, userID)
+	err := h.coverageService.VerifyCoverage(r.Context(), coverageID, userID)
 	if err != nil {
-		if err.Error() == "coverage not found" {
+		if err.Error() == "access denied: you do not have permission to verify this coverage" {
+			respondError(w, http.StatusForbidden, err.Error())
+		} else if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
 		} else {
 			logger.ErrorContext(r.Context(), "Failed to verify coverage", err)
