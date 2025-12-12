@@ -30,7 +30,9 @@
       "Bash(curl:*)",
       "Bash(xargs -0 -I {} curl -X PATCH \"http://localhost:9020/v1/projects/stunning-grin-480914-n1/instances/stunning-grin-480914-n1-instance/databases/stunning-grin-480914-n1-db/ddl\" -H \"Content-Type: application/json\" -d \"{\"\"statements\"\": [{}]}\")",
       "Bash(SPANNER_EMULATOR_HOST=localhost:9010 go run:*)",
-      "Bash(SPANNER_EMULATOR_HOST=localhost:9010 go test:*)"
+      "Bash(SPANNER_EMULATOR_HOST=localhost:9010 go test:*)",
+      "Bash(done)",
+      "Bash(xargs:*)"
     ]
   }
 }
