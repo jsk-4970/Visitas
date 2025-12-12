@@ -53,7 +53,7 @@ func (h *AllergyIntoleranceHandler) CreateAllergyIntolerance(w http.ResponseWrit
 	}
 
 	// Verify patient exists
-	_, err := h.patientRepo.GetByID(r.Context(), patientID)
+	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
 	if err != nil {
 		if err.Error() == "patient not found" {
 			respondError(w, http.StatusNotFound, "Patient not found")
@@ -64,21 +64,7 @@ func (h *AllergyIntoleranceHandler) CreateAllergyIntolerance(w http.ResponseWrit
 		return
 	}
 
-	// Marshal reactions to JSON
-	var reactionsJSON json.RawMessage
-	if len(req.Reactions) > 0 {
-		reactionsBytes, err := json.Marshal(req.Reactions)
-		if err != nil {
-			logger.WarnContext(r.Context(), "Failed to marshal reactions", map[string]interface{}{
-				"error": err.Error(),
-			})
-			respondError(w, http.StatusBadRequest, "Invalid reactions format")
-			return
-		}
-		reactionsJSON = json.RawMessage(reactionsBytes)
-	}
-
-	allergy, err := h.allergyRepo.Create(r.Context(), &req, reactionsJSON, userID)
+	allergy, err := h.allergyRepo.CreateAllergy(r.Context(), &req, userID)
 	if err != nil {
 		logger.ErrorContext(r.Context(), "Failed to create allergy intolerance", err)
 		respondError(w, http.StatusInternalServerError, "Failed to create allergy intolerance")
@@ -109,13 +95,13 @@ func (h *AllergyIntoleranceHandler) GetAllergyIntolerances(w http.ResponseWriter
 
 	if medicationOnly {
 		// Get only medication allergies
-		allergies, err = h.allergyRepo.GetMedicationAllergiesByPatientID(r.Context(), patientID)
+		allergies, err = h.allergyRepo.GetMedicationAllergies(r.Context(), patientID)
 	} else if activeOnly {
 		// Get only active allergies
-		allergies, err = h.allergyRepo.GetActiveByPatientID(r.Context(), patientID)
+		allergies, err = h.allergyRepo.GetActiveAllergies(r.Context(), patientID)
 	} else {
 		// Get all allergies
-		allergies, err = h.allergyRepo.GetByPatientID(r.Context(), patientID)
+		allergies, err = h.allergyRepo.GetAllergiesByPatient(r.Context(), patientID)
 	}
 
 	if err != nil {
@@ -138,7 +124,7 @@ func (h *AllergyIntoleranceHandler) GetAllergyIntolerance(w http.ResponseWriter,
 		return
 	}
 
-	allergy, err := h.allergyRepo.GetByID(r.Context(), allergyID)
+	allergy, err := h.allergyRepo.GetAllergyByID(r.Context(), allergyID)
 	if err != nil {
 		if err.Error() == "allergy intolerance not found" {
 			respondError(w, http.StatusNotFound, "Allergy intolerance not found")
@@ -176,7 +162,7 @@ func (h *AllergyIntoleranceHandler) UpdateAllergyIntolerance(w http.ResponseWrit
 		return
 	}
 
-	allergy, err := h.allergyRepo.Update(r.Context(), allergyID, &req, userID)
+	allergy, err := h.allergyRepo.UpdateAllergy(r.Context(), allergyID, &req, userID)
 	if err != nil {
 		if err.Error() == "allergy intolerance not found" {
 			respondError(w, http.StatusNotFound, "Allergy intolerance not found")
@@ -209,7 +195,7 @@ func (h *AllergyIntoleranceHandler) DeleteAllergyIntolerance(w http.ResponseWrit
 		return
 	}
 
-	err := h.allergyRepo.Delete(r.Context(), allergyID, userID)
+	err := h.allergyRepo.DeleteAllergy(r.Context(), allergyID, userID)
 	if err != nil {
 		if err.Error() == "allergy intolerance not found" {
 			respondError(w, http.StatusNotFound, "Allergy intolerance not found")

@@ -54,7 +54,7 @@ func (h *SocialProfileHandler) CreateSocialProfile(w http.ResponseWriter, r *htt
 	}
 
 	// Verify patient exists
-	_, err := h.patientRepo.GetByID(r.Context(), patientID)
+	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
 	if err != nil {
 		if err.Error() == "patient not found" {
 			respondError(w, http.StatusNotFound, "Patient not found")
@@ -65,17 +65,7 @@ func (h *SocialProfileHandler) CreateSocialProfile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Marshal content to JSON
-	contentJSON, err := json.Marshal(req.Content)
-	if err != nil {
-		logger.WarnContext(r.Context(), "Failed to marshal content", map[string]interface{}{
-			"error": err.Error(),
-		})
-		respondError(w, http.StatusBadRequest, "Invalid content format")
-		return
-	}
-
-	profile, err := h.socialProfileRepo.Create(r.Context(), &req, json.RawMessage(contentJSON), userID)
+	profile, err := h.socialProfileRepo.CreateSocialProfile(r.Context(), &req, userID)
 	if err != nil {
 		logger.ErrorContext(r.Context(), "Failed to create social profile", err)
 		respondError(w, http.StatusInternalServerError, "Failed to create social profile")
@@ -116,7 +106,7 @@ func (h *SocialProfileHandler) GetSocialProfiles(w http.ResponseWriter, r *http.
 
 	if currentOnly {
 		// Get only the current profile
-		currentProfile, err := h.socialProfileRepo.GetCurrentByPatientID(r.Context(), patientID)
+		currentProfile, err := h.socialProfileRepo.GetCurrentSocialProfile(r.Context(), patientID)
 		if err != nil {
 			if err.Error() == "no current social profile found" {
 				respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -134,7 +124,7 @@ func (h *SocialProfileHandler) GetSocialProfiles(w http.ResponseWriter, r *http.
 		profiles = []*models.PatientSocialProfile{currentProfile}
 	} else {
 		// Get all profiles (versioned history)
-		profiles, err = h.socialProfileRepo.GetByPatientID(r.Context(), patientID)
+		profiles, err = h.socialProfileRepo.GetSocialProfileHistory(r.Context(), patientID)
 		if err != nil {
 			logger.ErrorContext(r.Context(), "Failed to get social profiles", err)
 			respondError(w, http.StatusInternalServerError, "Failed to get social profiles")
@@ -158,7 +148,7 @@ func (h *SocialProfileHandler) GetSocialProfile(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	profile, err := h.socialProfileRepo.GetByID(r.Context(), profileID)
+	profile, err := h.socialProfileRepo.GetSocialProfileByID(r.Context(), profileID)
 	if err != nil {
 		if err.Error() == "social profile not found" {
 			respondError(w, http.StatusNotFound, "Social profile not found")
@@ -196,7 +186,7 @@ func (h *SocialProfileHandler) UpdateSocialProfile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	profile, err := h.socialProfileRepo.Update(r.Context(), profileID, &req, userID)
+	profile, err := h.socialProfileRepo.UpdateSocialProfile(r.Context(), profileID, &req, userID)
 	if err != nil {
 		if err.Error() == "social profile not found" {
 			respondError(w, http.StatusNotFound, "Social profile not found")
@@ -229,7 +219,7 @@ func (h *SocialProfileHandler) DeleteSocialProfile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	err := h.socialProfileRepo.Delete(r.Context(), profileID, userID)
+	err := h.socialProfileRepo.DeleteSocialProfile(r.Context(), profileID, userID)
 	if err != nil {
 		if err.Error() == "social profile not found" {
 			respondError(w, http.StatusNotFound, "Social profile not found")

@@ -53,7 +53,7 @@ func (h *MedicalConditionHandler) CreateMedicalCondition(w http.ResponseWriter, 
 	}
 
 	// Verify patient exists
-	_, err := h.patientRepo.GetByID(r.Context(), patientID)
+	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
 	if err != nil {
 		if err.Error() == "patient not found" {
 			respondError(w, http.StatusNotFound, "Patient not found")
@@ -64,7 +64,7 @@ func (h *MedicalConditionHandler) CreateMedicalCondition(w http.ResponseWriter, 
 		return
 	}
 
-	condition, err := h.conditionRepo.Create(r.Context(), &req, userID)
+	condition, err := h.conditionRepo.CreateCondition(r.Context(), &req, userID)
 	if err != nil {
 		logger.ErrorContext(r.Context(), "Failed to create medical condition", err)
 		respondError(w, http.StatusInternalServerError, "Failed to create medical condition")
@@ -94,10 +94,10 @@ func (h *MedicalConditionHandler) GetMedicalConditions(w http.ResponseWriter, r 
 
 	if activeOnly {
 		// Get only active conditions
-		conditions, err = h.conditionRepo.GetActiveByPatientID(r.Context(), patientID)
+		conditions, err = h.conditionRepo.GetActiveConditions(r.Context(), patientID)
 	} else {
 		// Get all conditions
-		conditions, err = h.conditionRepo.GetByPatientID(r.Context(), patientID)
+		conditions, err = h.conditionRepo.GetConditionsByPatient(r.Context(), patientID)
 	}
 
 	if err != nil {
@@ -120,7 +120,7 @@ func (h *MedicalConditionHandler) GetMedicalCondition(w http.ResponseWriter, r *
 		return
 	}
 
-	condition, err := h.conditionRepo.GetByID(r.Context(), conditionID)
+	condition, err := h.conditionRepo.GetConditionByID(r.Context(), conditionID)
 	if err != nil {
 		if err.Error() == "medical condition not found" {
 			respondError(w, http.StatusNotFound, "Medical condition not found")
@@ -158,7 +158,7 @@ func (h *MedicalConditionHandler) UpdateMedicalCondition(w http.ResponseWriter, 
 		return
 	}
 
-	condition, err := h.conditionRepo.Update(r.Context(), conditionID, &req, userID)
+	condition, err := h.conditionRepo.UpdateCondition(r.Context(), conditionID, &req, userID)
 	if err != nil {
 		if err.Error() == "medical condition not found" {
 			respondError(w, http.StatusNotFound, "Medical condition not found")
@@ -191,7 +191,7 @@ func (h *MedicalConditionHandler) DeleteMedicalCondition(w http.ResponseWriter, 
 		return
 	}
 
-	err := h.conditionRepo.Delete(r.Context(), conditionID, userID)
+	err := h.conditionRepo.DeleteCondition(r.Context(), conditionID, userID)
 	if err != nil {
 		if err.Error() == "medical condition not found" {
 			respondError(w, http.StatusNotFound, "Medical condition not found")

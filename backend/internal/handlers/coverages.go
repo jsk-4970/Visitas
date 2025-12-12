@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/visitas/backend/internal/middleware"
@@ -54,7 +53,7 @@ func (h *CoverageHandler) CreateCoverage(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Verify patient exists
-	_, err := h.patientRepo.GetByID(r.Context(), patientID)
+	_, err := h.patientRepo.GetPatientByID(r.Context(), patientID)
 	if err != nil {
 		if err.Error() == "patient not found" {
 			respondError(w, http.StatusNotFound, "Patient not found")
@@ -65,7 +64,7 @@ func (h *CoverageHandler) CreateCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	coverage, err := h.coverageRepo.Create(r.Context(), &req, userID)
+	coverage, err := h.coverageRepo.CreateCoverage(r.Context(), &req, userID)
 	if err != nil {
 		logger.ErrorContext(r.Context(), "Failed to create coverage", err)
 		respondError(w, http.StatusInternalServerError, "Failed to create coverage")
@@ -96,13 +95,13 @@ func (h *CoverageHandler) GetCoverages(w http.ResponseWriter, r *http.Request) {
 
 	if insuranceType != "" {
 		// Filter by insurance type
-		coverages, err = h.coverageRepo.GetByPatientIDAndType(r.Context(), patientID, insuranceType)
+		coverages, err = h.coverageRepo.GetCoveragesByPatientAndType(r.Context(), patientID, insuranceType)
 	} else if activeOnly {
 		// Get only active coverages
-		coverages, err = h.coverageRepo.GetActiveByPatientID(r.Context(), patientID)
+		coverages, err = h.coverageRepo.GetActiveCoverages(r.Context(), patientID)
 	} else {
 		// Get all coverages
-		coverages, err = h.coverageRepo.GetByPatientID(r.Context(), patientID)
+		coverages, err = h.coverageRepo.GetCoveragesByPatient(r.Context(), patientID)
 	}
 
 	if err != nil {
@@ -125,7 +124,7 @@ func (h *CoverageHandler) GetCoverage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coverage, err := h.coverageRepo.GetByID(r.Context(), coverageID)
+	coverage, err := h.coverageRepo.GetCoverageByID(r.Context(), coverageID)
 	if err != nil {
 		if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
@@ -163,7 +162,7 @@ func (h *CoverageHandler) UpdateCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	coverage, err := h.coverageRepo.Update(r.Context(), coverageID, &req, userID)
+	coverage, err := h.coverageRepo.UpdateCoverage(r.Context(), coverageID, &req, userID)
 	if err != nil {
 		if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
@@ -196,7 +195,7 @@ func (h *CoverageHandler) DeleteCoverage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := h.coverageRepo.Delete(r.Context(), coverageID, userID)
+	err := h.coverageRepo.DeleteCoverage(r.Context(), coverageID, userID)
 	if err != nil {
 		if err.Error() == "coverage not found" {
 			respondError(w, http.StatusNotFound, "Coverage not found")
