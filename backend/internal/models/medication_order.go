@@ -27,6 +27,9 @@ type MedicationOrder struct {
 
 	// Prescription reason (reference to condition ID)
 	ReasonReference    sql.NullString  `json:"reason_reference,omitempty"`
+
+	// Optimistic Locking
+	Version int `json:"version"`
 }
 
 // MedicationOrderCreateRequest represents the request body for creating a medication order
@@ -51,6 +54,8 @@ type MedicationOrderUpdateRequest struct {
 	PrescribedBy       *string         `json:"prescribed_by,omitempty"`
 	DispensePharmacy   json.RawMessage `json:"dispense_pharmacy,omitempty"`
 	ReasonReference    *string         `json:"reason_reference,omitempty"`
+
+	ExpectedVersion    *int            `json:"expected_version,omitempty"` // Optimistic locking
 }
 
 // MedicationOrderFilter represents filter options for listing medication orders

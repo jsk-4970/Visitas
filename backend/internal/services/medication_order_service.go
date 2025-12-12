@@ -244,7 +244,32 @@ func (s *MedicationOrderService) UpdateMedicationOrder(ctx context.Context, pati
 		}
 	}
 
-	order, err := s.medicationOrderRepo.Update(ctx, patientID, orderID, req)
+	// Get existing medication order for optimistic locking
+	existing, err := s.medicationOrderRepo.GetByID(ctx, patientID, orderID)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to fetch medication order for update", err, map[string]interface{}{
+			"patient_id": patientID,
+			"order_id":   orderID,
+		})
+		return nil, err
+	}
+
+	// Check version for optimistic locking if provided
+	if req.ExpectedVersion != nil && existing.Version != *req.ExpectedVersion {
+		logger.WarnContext(ctx, "Concurrent edit conflict detected", map[string]interface{}{
+			"order_id":         orderID,
+			"expected_version": *req.ExpectedVersion,
+			"actual_version":   existing.Version,
+		})
+		return nil, fmt.Errorf("CONFLICT: Medication order was modified by another user. Please refresh and try again. Expected version %d but found %d", *req.ExpectedVersion, existing.Version)
+	}
+
+	var order *models.MedicationOrder
+	if req.ExpectedVersion != nil {
+		order, err = s.medicationOrderRepo.UpdateWithVersion(ctx, patientID, orderID, *req.ExpectedVersion, req)
+	} else {
+		order, err = s.medicationOrderRepo.Update(ctx, patientID, orderID, req)
+	}
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to update medication order", err, map[string]interface{}{
 			"patient_id": patientID,

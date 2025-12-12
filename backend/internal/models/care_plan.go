@@ -25,6 +25,9 @@ type CarePlan struct {
 	Goals      json.RawMessage `json:"goals,omitempty"`
 	Activities json.RawMessage `json:"activities,omitempty"`
 
+	// Optimistic Locking
+	Version int `json:"version"`
+
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -60,6 +63,8 @@ type CarePlanUpdateRequest struct {
 
 	Goals      json.RawMessage `json:"goals,omitempty"`
 	Activities json.RawMessage `json:"activities,omitempty"`
+
+	ExpectedVersion *int `json:"expected_version,omitempty"` // Optimistic locking
 }
 
 // CarePlanFilter represents filter options for listing care plans

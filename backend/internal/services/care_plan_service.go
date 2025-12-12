@@ -227,7 +227,32 @@ func (s *CarePlanService) UpdateCarePlan(ctx context.Context, patientID, planID 
 		return nil, fmt.Errorf("title cannot be empty")
 	}
 
-	plan, err := s.carePlanRepo.Update(ctx, patientID, planID, req)
+	// Get existing care plan for optimistic locking
+	existing, err := s.carePlanRepo.GetByID(ctx, patientID, planID)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to fetch care plan for update", err, map[string]interface{}{
+			"patient_id": patientID,
+			"plan_id":    planID,
+		})
+		return nil, err
+	}
+
+	// Check version for optimistic locking if provided
+	if req.ExpectedVersion != nil && existing.Version != *req.ExpectedVersion {
+		logger.WarnContext(ctx, "Concurrent edit conflict detected", map[string]interface{}{
+			"plan_id":          planID,
+			"expected_version": *req.ExpectedVersion,
+			"actual_version":   existing.Version,
+		})
+		return nil, fmt.Errorf("CONFLICT: Care plan was modified by another user. Please refresh and try again. Expected version %d but found %d", *req.ExpectedVersion, existing.Version)
+	}
+
+	var plan *models.CarePlan
+	if req.ExpectedVersion != nil {
+		plan, err = s.carePlanRepo.UpdateWithVersion(ctx, patientID, planID, *req.ExpectedVersion, req)
+	} else {
+		plan, err = s.carePlanRepo.Update(ctx, patientID, planID, req)
+	}
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to update care plan", err, map[string]interface{}{
 			"patient_id": patientID,

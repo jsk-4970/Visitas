@@ -201,9 +201,18 @@ components:
         activities:
           type: object
           description: JSONB field for planned activities
-        author_id:
+        version:
+          type: integer
+          description: Optimistic locking version counter
+        created_by:
           type: string
           format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     MedicationOrder:
       type: object
@@ -242,6 +251,9 @@ components:
           type: string
         note:
           type: string
+        version:
+          type: integer
+          description: Optimistic locking version counter
 
     ACPRecord:
       type: object

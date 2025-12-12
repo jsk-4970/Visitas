@@ -40,6 +40,7 @@ func (r *CarePlanRepository) Create(ctx context.Context, patientID string, req *
 		PeriodStart: req.PeriodStart,
 		Goals:       req.Goals,
 		Activities:  req.Activities,
+		Version:     1,
 		CreatedBy:   req.CreatedBy,
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -66,13 +67,13 @@ func (r *CarePlanRepository) Create(ctx context.Context, patientID string, req *
 			"plan_id", "patient_id", "status", "intent",
 			"title", "description", "period_start", "period_end",
 			"goals", "activities",
-			"created_by", "created_at", "updated_at",
+			"version", "created_by", "created_at", "updated_at",
 		},
 		[]interface{}{
 			planID, patientID, req.Status, req.Intent,
 			req.Title, carePlan.Description, req.PeriodStart, carePlan.PeriodEnd,
 			goalsStr, activitiesStr,
-			req.CreatedBy, now, now,
+			1, req.CreatedBy, now, now,
 		},
 	)
 
@@ -91,7 +92,7 @@ func (r *CarePlanRepository) GetByID(ctx context.Context, patientID, planID stri
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
 			goals, activities,
-			created_by, created_at, updated_at
+			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND plan_id = @plan_id`,
 		Params: map[string]interface{}{
@@ -169,7 +170,7 @@ func (r *CarePlanRepository) List(ctx context.Context, filter *models.CarePlanFi
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
 			goals, activities,
-			created_by, created_at, updated_at
+			version, created_by, created_at, updated_at
 		FROM care_plans
 		%s
 		ORDER BY period_start DESC, created_at DESC
@@ -260,6 +261,96 @@ func (r *CarePlanRepository) Update(ctx context.Context, patientID, planID strin
 	updates["updated_at"] = time.Now()
 	existing.UpdatedAt = updates["updated_at"].(time.Time)
 
+	// Increment version for optimistic locking
+	updates["version"] = existing.Version + 1
+	existing.Version++
+
+	// Build column list and values
+	columns := []string{"patient_id", "plan_id"}
+	values := []interface{}{patientID, planID}
+
+	for col, val := range updates {
+		columns = append(columns, col)
+		values = append(values, val)
+	}
+
+	mutation := spanner.Update("care_plans", columns, values)
+
+	_, err = r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update care plan: %w", err)
+	}
+
+	return existing, nil
+}
+
+// UpdateWithVersion updates a care plan with optimistic locking
+func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, planID string, expectedVersion int, req *models.CarePlanUpdateRequest) (*models.CarePlan, error) {
+	// First, get the existing care plan
+	existing, err := r.GetByID(ctx, patientID, planID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check version for optimistic locking
+	if existing.Version != expectedVersion {
+		return nil, fmt.Errorf("CONFLICT: Care plan was modified by another user. Expected version %d but found %d", expectedVersion, existing.Version)
+	}
+
+	// Build update map
+	updates := make(map[string]interface{})
+
+	if req.Status != nil {
+		updates["status"] = *req.Status
+		existing.Status = *req.Status
+	}
+
+	if req.Intent != nil {
+		updates["intent"] = *req.Intent
+		existing.Intent = *req.Intent
+	}
+
+	if req.Title != nil {
+		updates["title"] = *req.Title
+		existing.Title = *req.Title
+	}
+
+	if req.Description != nil {
+		updates["description"] = sql.NullString{String: *req.Description, Valid: true}
+		existing.Description = sql.NullString{String: *req.Description, Valid: true}
+	}
+
+	if req.PeriodStart != nil {
+		updates["period_start"] = *req.PeriodStart
+		existing.PeriodStart = *req.PeriodStart
+	}
+
+	if req.PeriodEnd != nil {
+		updates["period_end"] = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
+		existing.PeriodEnd = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
+	}
+
+	if len(req.Goals) > 0 {
+		updates["goals"] = sql.NullString{String: string(req.Goals), Valid: true}
+		existing.Goals = req.Goals
+	}
+
+	if len(req.Activities) > 0 {
+		updates["activities"] = sql.NullString{String: string(req.Activities), Valid: true}
+		existing.Activities = req.Activities
+	}
+
+	if len(updates) == 0 {
+		return existing, nil
+	}
+
+	updates["updated_at"] = time.Now()
+	existing.UpdatedAt = updates["updated_at"].(time.Time)
+
+	// Increment version
+	updates["version"] = existing.Version + 1
+	existing.Version++
+
 	// Build column list and values
 	columns := []string{"patient_id", "plan_id"}
 	values := []interface{}{patientID, planID}
@@ -298,7 +389,7 @@ func (r *CarePlanRepository) GetActiveCarePlans(ctx context.Context, patientID s
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
 			goals, activities,
-			created_by, created_at, updated_at
+			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY period_start DESC`,
@@ -346,6 +437,7 @@ func scanCarePlan(row *spanner.Row) (*models.CarePlan, error) {
 		&carePlan.PeriodEnd,
 		&goalsStr,
 		&activitiesStr,
+		&carePlan.Version,
 		&carePlan.CreatedBy,
 		&carePlan.CreatedAt,
 		&carePlan.UpdatedAt,

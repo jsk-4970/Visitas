@@ -32,7 +32,8 @@
       "Bash(SPANNER_EMULATOR_HOST=localhost:9010 go run:*)",
       "Bash(SPANNER_EMULATOR_HOST=localhost:9010 go test:*)",
       "Bash(done)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(git add:*)"
     ]
   }
 }

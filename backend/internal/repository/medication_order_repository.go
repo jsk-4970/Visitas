@@ -40,6 +40,7 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 		PrescribedDate:    req.PrescribedDate,
 		PrescribedBy:      req.PrescribedBy,
 		DispensePharmacy:  req.DispensePharmacy,
+		Version:           1,
 	}
 
 	if req.ReasonReference != nil {
@@ -60,13 +61,13 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 			"order_id", "patient_id", "status", "intent",
 			"medication", "dosage_instruction",
 			"prescribed_date", "prescribed_by",
-			"dispense_pharmacy", "reason_reference",
+			"dispense_pharmacy", "reason_reference", "version",
 		},
 		[]interface{}{
 			orderID, patientID, req.Status, req.Intent,
 			medicationStr, dosageInstructionStr,
 			req.PrescribedDate, req.PrescribedBy,
-			dispensePharmacyStr, order.ReasonReference,
+			dispensePharmacyStr, order.ReasonReference, 1,
 		},
 	)
 
@@ -85,7 +86,7 @@ func (r *MedicationOrderRepository) GetByID(ctx context.Context, patientID, orde
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference
+			dispense_pharmacy, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND order_id = @order_id`,
 		Params: map[string]interface{}{
@@ -168,7 +169,7 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference
+			dispense_pharmacy, reason_reference, version
 		FROM medication_orders
 		%s
 		ORDER BY prescribed_date DESC
@@ -256,6 +257,93 @@ func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, order
 		return existing, nil
 	}
 
+	// Increment version for optimistic locking
+	updates["version"] = existing.Version + 1
+	existing.Version++
+
+	// Build column list and values
+	columns := []string{"patient_id", "order_id"}
+	values := []interface{}{patientID, orderID}
+
+	for col, val := range updates {
+		columns = append(columns, col)
+		values = append(values, val)
+	}
+
+	mutation := spanner.Update("medication_orders", columns, values)
+
+	_, err = r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update medication order: %w", err)
+	}
+
+	return existing, nil
+}
+
+// UpdateWithVersion updates a medication order with optimistic locking
+func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
+	// First, get the existing order
+	existing, err := r.GetByID(ctx, patientID, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check version for optimistic locking
+	if existing.Version != expectedVersion {
+		return nil, fmt.Errorf("CONFLICT: Medication order was modified by another user. Expected version %d but found %d", expectedVersion, existing.Version)
+	}
+
+	// Build update map
+	updates := make(map[string]interface{})
+
+	if req.Status != nil {
+		updates["status"] = *req.Status
+		existing.Status = *req.Status
+	}
+
+	if req.Intent != nil {
+		updates["intent"] = *req.Intent
+		existing.Intent = *req.Intent
+	}
+
+	if len(req.Medication) > 0 {
+		updates["medication"] = string(req.Medication)
+		existing.Medication = req.Medication
+	}
+
+	if len(req.DosageInstruction) > 0 {
+		updates["dosage_instruction"] = string(req.DosageInstruction)
+		existing.DosageInstruction = req.DosageInstruction
+	}
+
+	if req.PrescribedDate != nil {
+		updates["prescribed_date"] = *req.PrescribedDate
+		existing.PrescribedDate = *req.PrescribedDate
+	}
+
+	if req.PrescribedBy != nil {
+		updates["prescribed_by"] = *req.PrescribedBy
+		existing.PrescribedBy = *req.PrescribedBy
+	}
+
+	if len(req.DispensePharmacy) > 0 {
+		updates["dispense_pharmacy"] = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		existing.DispensePharmacy = req.DispensePharmacy
+	}
+
+	if req.ReasonReference != nil {
+		updates["reason_reference"] = sql.NullString{String: *req.ReasonReference, Valid: true}
+		existing.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+	}
+
+	if len(updates) == 0 {
+		return existing, nil
+	}
+
+	// Increment version
+	updates["version"] = existing.Version + 1
+	existing.Version++
+
 	// Build column list and values
 	columns := []string{"patient_id", "order_id"}
 	values := []interface{}{patientID, orderID}
@@ -294,7 +382,7 @@ func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patient
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference
+			dispense_pharmacy, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY prescribed_date DESC`,
@@ -333,7 +421,7 @@ func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context,
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference
+			dispense_pharmacy, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id
 		  AND prescribed_by = @prescribed_by
@@ -386,6 +474,7 @@ func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 		&order.PrescribedBy,
 		&dispensePharmacyStr,
 		&order.ReasonReference,
+		&order.Version,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan medication order: %w", err)
