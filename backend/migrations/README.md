@@ -2,23 +2,46 @@
 
 このディレクトリには、Visitasプロジェクトのデータベーススキーマ定義が含まれています。
 
-## マイグレーションファイル一覧
+## ✅ 実装済みマイグレーションファイル
 
-1. `001_create_patients.sql` - 患者マスターテーブル (Root Table)
-2. `002_create_patient_identifiers.sql` - 患者識別子テーブル (マイナンバー、保険証番号等)
-3. `003_create_patient_social_profiles.sql` - 社会的背景テーブル (Subjective)
-4. `004_create_patient_coverages.sql` - 保険情報テーブル
-5. `005_create_medical_conditions.sql` - 病名・既往歴テーブル
-6. `006_create_allergy_intolerances.sql` - アレルギー・副作用歴テーブル
-7. `007_create_clinical_observations.sql` - バイタルサイン・ADL評価テーブル
-8. `008_create_care_plans.sql` - ケア計画テーブル
-9. `009_create_acp_records.sql` - ACP (Advance Care Planning) テーブル
-10. `010_create_medication_orders.sql` - 処方オーダーテーブル
-11. `011_create_visit_schedules.sql` - 訪問スケジュールテーブル
-12. `012_create_logistics_locations.sql` - ロジスティクス拠点テーブル
-13. `013_create_route_optimization_jobs.sql` - ルート最適化ジョブ履歴テーブル
-14. `014_create_audit_logs.sql` - 監査ログテーブル
-15. `015_create_staff_tables.sql` - スタッフ・車両管理テーブル
+### Phase 1 Core Tables (2025-12-12 完成)
+
+1. **`001_create_patients.sql`** - 患者マスターテーブル (Root Table)
+   - JSONB: `name_history`, `contact_points`, `addresses`, `consent_details`
+   - Generated Columns: `current_family_name`, `current_given_name`, `primary_phone`, `current_prefecture`, `current_city`
+   - 論理削除、同意管理、監査フィールド完備
+
+2. **`002_create_social_profiles.sql`** - 社会的背景テーブル (Subjective - FHIR SDOH)
+   - JSONB: `content` (生活状況、キーパーソン、経済状況、社会的支援)
+   - Generated Columns: `lives_alone`, `requires_caregiver_support`
+   - バージョニング、有効期間管理
+
+3. **`003_create_coverages.sql`** - 保険情報テーブル
+   - JSONB: `details` (保険種別ごとの詳細情報)
+   - Generated Columns: `care_level_code`, `copay_rate`
+   - 優先順位管理、検証ステータス
+
+4. **`004_create_medical_conditions.sql`** - 病名・既往歴テーブル (FHIR Condition準拠)
+   - 臨床ステータス、検証ステータス (FHIR準拠)
+   - ICD-10/SNOMED-CT コード管理
+   - 発症・寛解情報追跡
+
+5. **`005_create_allergy_intolerances.sql`** - アレルギー・副作用歴テーブル (FHIR AllergyIntolerance準拠)
+   - JSONB: `reactions` (反応イベント配列)
+   - Generated Column: `max_severity` (最大重症度の自動計算)
+   - クリティカリティ評価、薬剤アレルギー特化検索
+
+## 📋 計画中のマイグレーション (Phase 2-3)
+
+6. `006_create_clinical_observations.sql` - バイタルサイン・ADL評価テーブル (未実装)
+7. `007_create_care_plans.sql` - ケア計画テーブル (未実装)
+8. `008_create_acp_records.sql` - ACP (Advance Care Planning) テーブル (未実装)
+9. `009_create_medication_orders.sql` - 処方オーダーテーブル (未実装)
+10. `010_create_visit_schedules.sql` - 訪問スケジュールテーブル (未実装)
+11. `011_create_logistics_locations.sql` - ロジスティクス拠点テーブル (未実装)
+12. `012_create_route_optimization_jobs.sql` - ルート最適化ジョブ履歴テーブル (未実装)
+13. `013_create_audit_logs.sql` - 監査ログテーブル (未実装)
+14. `014_create_staff_tables.sql` - スタッフ・車両管理テーブル (未実装)
 
 ## 適用方法
 

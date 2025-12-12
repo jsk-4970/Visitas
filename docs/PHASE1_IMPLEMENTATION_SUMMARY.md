@@ -1,26 +1,32 @@
 # Phase 1 Implementation Summary
 
-**Date:** 2025-12-12
-**Status:** ✅ Core Implementation Complete
-**Progress:** Week 2-3 Components Delivered
+**Date:** 2025-12-12 (Updated)
+**Status:** ✅ Core Implementation Complete + Extended Models
+**Progress:** Week 2-3 Components Delivered + Week 4 Schema Extensions
 
 ---
 
 ## 🎯 Executive Summary
 
-I have successfully implemented the core backend infrastructure for the Visitas patient management system according to Phase 1 specifications. This includes:
+Successfully implemented the complete backend infrastructure for the Visitas patient management system according to Phase 1 specifications, with schema extensions for medical data management. This includes:
 
-- **4 Repository Layers** for data access (Patient, Identifier, Assignment, Audit)
+- **8 Repository Layers** for comprehensive data access:
+  - Core: Patient, Identifier, Assignment, Audit
+  - Medical: SocialProfile, Coverage, MedicalCondition, AllergyIntolerance
+- **5 Database Migrations** with JSONB fields and generated columns
 - **Complete Security Stack** (KMS encryption, Authentication, Audit logging)
 - **RESTful API** with 11 endpoints for patient and identifier management
 - **Row-Level Security (RLS)** implementation for access control
-- **Structured Logging** with context awareness
+- **FHIR-aligned data models** (Condition, AllergyIntolerance, Coverage)
+- **OpenAPI 3.1 Specification** with accurate schema documentation
 
 ---
 
 ## ✅ Completed Components
 
 ### 1. Repository Layer (`internal/repository/`)
+
+#### **Core Repositories (Week 2-3)**
 
 #### **patient_repository.go**
 - ✅ `CreatePatient` - Creates new patient with JSONB history tracking
@@ -76,9 +82,101 @@ I have successfully implemented the core backend infrastructure for the Visitas 
 - Accessed fields recording (JSONB)
 - Success/failure tracking with error messages
 
+#### **Extended Medical Repositories (Week 4 - 2025-12-12)**
+
+#### **social_profile_repository.go**
+- ✅ `CreateSocialProfile` - Creates JSONB-based social history profile
+- ✅ `GetSocialProfileByID` - Retrieves profile with generated fields
+- ✅ `GetCurrentSocialProfile` - Gets current valid profile for patient
+- ✅ `GetSocialProfileHistory` - Version history retrieval
+- ✅ `UpdateSocialProfile` - Updates profile with versioning
+- ✅ `DeleteSocialProfile` - Soft delete
+
+**Key Features:**
+- JSONB content with living situation, key persons, financial background, social support
+- Generated columns: `lives_alone`, `requires_caregiver_support`
+- Validity period tracking (valid_from/valid_to)
+- Profile versioning for change history
+
+#### **coverage_repository.go**
+- ✅ `CreateCoverage` - Creates insurance coverage record
+- ✅ `GetCoverageByID` - Retrieves coverage details
+- ✅ `GetActiveCoverages` - Lists active coverages by priority
+- ✅ `GetCoveragesByPatient` - All coverages including expired
+- ✅ `UpdateCoverage` - Updates coverage with verification workflow
+- ✅ `DeleteCoverage` - Soft delete
+
+**Key Features:**
+- Support for 3 insurance types: medical, long_term_care, public_expense
+- JSONB details with type-specific fields
+- Generated columns: `care_level_code`, `copay_rate`
+- Priority-based coverage ordering
+- Verification status tracking
+
+#### **medical_condition_repository.go**
+- ✅ `CreateCondition` - Creates FHIR-aligned condition record
+- ✅ `GetConditionByID` - Retrieves condition details
+- ✅ `GetActiveConditions` - Lists active conditions (active/recurrence/relapse)
+- ✅ `GetConditionsByPatient` - Complete condition history
+- ✅ `UpdateCondition` - Updates clinical/verification status
+- ✅ `DeleteCondition` - Soft delete
+
+**Key Features:**
+- FHIR R4 Condition resource alignment
+- Clinical status: active, recurrence, relapse, inactive, remission, resolved
+- Verification status: unconfirmed, provisional, differential, confirmed, refuted
+- ICD-10/SNOMED-CT code support
+- Onset/abatement tracking
+
+#### **allergy_intolerance_repository.go**
+- ✅ `CreateAllergy` - Creates FHIR-aligned allergy/intolerance record
+- ✅ `GetAllergyByID` - Retrieves allergy with reactions
+- ✅ `GetActiveAllergies` - Lists active allergies by criticality
+- ✅ `GetMedicationAllergies` - Medication-specific allergy retrieval
+- ✅ `GetAllergiesByPatient` - Complete allergy history
+- ✅ `UpdateAllergy` - Updates allergy with reaction tracking
+- ✅ `DeleteAllergy` - Soft delete
+
+**Key Features:**
+- FHIR R4 AllergyIntolerance resource alignment
+- JSONB reactions array with manifestations, severity, exposure route
+- Generated column: `max_severity` (auto-computed from reactions)
+- Categories: food, medication, environment, biologic
+- Criticality levels: low, high, unable-to-assess
+- Last occurrence date tracking
+
 ---
 
-### 2. Encryption Layer (`pkg/encryption/`)
+### 2. Database Schema (`backend/migrations/`)
+
+#### **001_create_patients.sql**
+- Full patient master table with JSONB history tracking
+- 5 generated columns for fast queries
+- Consent management, soft delete, audit trail
+
+#### **002_create_social_profiles.sql**
+- Social history with JSONB content structure
+- Generated columns for quick filtering
+- Version and validity period management
+
+#### **003_create_coverages.sql**
+- Multi-type insurance coverage (医療保険/介護保険/公費)
+- Generated columns for care level and copay rate
+- Priority and verification workflow
+
+#### **004_create_medical_conditions.sql**
+- FHIR-compliant condition tracking
+- ICD-10/SNOMED-CT coding
+- Onset/abatement lifecycle management
+
+#### **005_create_allergy_intolerances.sql**
+- FHIR-compliant allergy tracking
+- JSONB reactions with max severity generation
+- Medication allergy optimization
+
+---
+
+### 3. Encryption Layer (`pkg/encryption/`)
 
 #### **kms_aead.go**
 - ✅ `NewKMSEncryptor` - Initializes KMS client
