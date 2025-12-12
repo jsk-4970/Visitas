@@ -10,32 +10,38 @@
    - 個別の関数・メソッドの動作検証
    - モックを使用して外部依存を分離
    - カバレッジ目標: 80%以上
+   - **実装状況**: 一部実装済み（identifier関連）
 
-2. **統合テスト** (`tests/integration/`)
-   - 複数のコンポーネントの連携テスト
-   - Testcontainersを使用したローカルDB
-   - APIエンドポイントのE2Eテスト
+2. **統合テスト** (`tests/integration/`) ✅ **Phase 1完了**
+   - 複数のコンポーネントの連携テスト（Handler→Service→Repository）
+   - Cloud Spannerデータベースを使用した実際のE2Eテスト
+   - APIエンドポイントの完全なテスト
+   - **実装状況**: Phase 1の5ドメイン完全実装（42+テストケース）
 
 3. **パフォーマンステスト** (`tests/performance/`)
    - 負荷テスト (Locust / k6)
    - 目標: 1000同時接続、レスポンス<200ms
+   - **実装状況**: 未実装
 
 ## ディレクトリ構造
 
 ```
 tests/
-├── README.md                  # このファイル
-├── integration/               # 統合テスト
-│   ├── api_test.go
-│   ├── db_test.go
-│   └── fixtures/
-├── performance/               # パフォーマンステスト
+├── README.md                           # このファイル
+├── integration/                        # 統合テスト（✅ 実装完了）
+│   ├── helpers.go                      # テスト基盤（テストサーバー、ヘルパー関数）
+│   ├── visit_schedules_test.go         # 訪問スケジュールの統合テスト
+│   ├── clinical_observations_test.go   # バイタル・ADL評価の統合テスト
+│   ├── care_plans_test.go              # ケア計画の統合テスト
+│   ├── medication_orders_test.go       # 処方オーダーの統合テスト
+│   └── acp_records_test.go             # ACP記録の統合テスト
+├── performance/                        # パフォーマンステスト（未実装）
 │   ├── locustfile.py
 │   └── k6_script.js
-├── mocks/                     # モック生成
+├── mocks/                              # モック生成（未実装）
 │   ├── repository/
 │   └── services/
-└── testdata/                  # テストデータ
+└── testdata/                           # テストデータ（未実装）
     ├── patients.json
     ├── social_profiles.json
     └── coverages.json
@@ -162,84 +168,104 @@ func TestCreatePatient(t *testing.T) {
 
 ## 統合テストの実行
 
-### Testcontainersを使用したローカルDB
+### 環境準備
+
+統合テストを実行するには、Cloud Spannerデータベース（または互換エミュレータ）が必要です：
+
+```bash
+# 環境変数を設定
+export GCP_PROJECT_ID=stunning-grin-480914-n1
+export SPANNER_INSTANCE=stunning-grin-480914-n1-instance
+export SPANNER_DATABASE=stunning-grin-480914-n1-db
+
+# または .env ファイルに記載
+```
+
+### 統合テストの実行方法
+
+```bash
+# すべての統合テストを実行
+cd backend
+go test ./tests/integration -v -count=1
+
+# カバレッジ付きで実行
+go test ./tests/integration -v -coverprofile=coverage.out
+go tool cover -html=coverage.out -o coverage.html
+
+# 特定のドメインのみテスト
+go test ./tests/integration -v -run TestVisitSchedule
+
+# 特定のテストケースのみ実行
+go test ./tests/integration -v -run TestVisitSchedule_Integration_CreateAndGet
+```
+
+### 統合テストの構造
+
+統合テストは以下のパターンで実装されています：
 
 ```go
-import (
-	"context"
-	"testing"
-
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
-)
-
-func setupTestDB(t *testing.T) *testcontainers.Container {
-	ctx := context.Background()
-
-	req := testcontainers.ContainerRequest{
-		Image:        "postgres:15",
-		ExposedPorts: []string{"5432/tcp"},
-		Env: map[string]string{
-			"POSTGRES_USER":     "test",
-			"POSTGRES_PASSWORD": "test",
-			"POSTGRES_DB":       "visitas_test",
-		},
-		WaitingFor: wait.ForListeningPort("5432/tcp"),
+func TestDomain_Integration_Operation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
 	}
 
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
+	// Setup: テストサーバーとテスト患者を作成
+	ts := SetupTestServer(t)
+	defer ts.Close()
+	patientID := ts.CreateTestPatient(t)
+
+	// Test: 実際のHTTPリクエストを送信
+	t.Run("Test case name", func(t *testing.T) {
+		// Arrange: テストデータを準備
+		requestJSON := `{...}`
+
+		// Act: HTTPリクエストを実行
+		resp := ts.MakeRequest(t, http.MethodPost, "/api/v1/...", strings.NewReader(requestJSON))
+
+		// Assert: レスポンスを検証
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		var result models.Model
+		DecodeJSONResponse(t, resp, &result)
+		assert.NotEmpty(t, result.ID)
 	})
-	if err != nil {
-		t.Fatalf("Failed to start container: %v", err)
-	}
-
-	return &container
 }
 ```
 
-### APIエンドポイントのテスト
+## 実装済み統合テスト一覧
 
-```go
-func TestPatientAPI_CreatePatient(t *testing.T) {
-	// Setup test server
-	router := setupTestRouter()
-	server := httptest.NewServer(router)
-	defer server.Close()
+### Phase 1ドメイン（完全実装）
 
-	// Create request
-	reqBody := models.PatientCreateRequest{
-		BirthDate: "1950-01-15",
-		Gender:    "male",
-		Name: models.NameRecord{
-			Family: "山田",
-			Given:  "太郎",
-			Kana:   "ヤマダ タロウ",
-		},
-		// ...
-	}
+| ドメイン | テストファイル | テストケース数 | カバー範囲 |
+|---------|--------------|--------------|----------|
+| 訪問スケジュール | `visit_schedules_test.go` | 10+ | CRUD, バリデーション, 制約条件 |
+| バイタル・ADL評価 | `clinical_observations_test.go` | 10+ | バイタル測定, ADL評価, 時系列データ |
+| ケア計画 | `care_plans_test.go` | 6+ | CRUD, 目標・活動管理 |
+| 処方オーダー | `medication_orders_test.go` | 7+ | CRUD, 薬局情報, アクティブ処方 |
+| ACP記録 | `acp_records_test.go` | 9+ | CRUD, バージョン管理, 法的文書 |
 
-	body, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", server.URL+"/v1/patients", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+getTestToken())
+**合計**: 42+テストケース（バリデーションエラーテストを含めると80+）
 
-	// Execute
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
+### テストカバレッジ
 
-	// Assert
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+各ドメインで以下の操作をテスト：
+- ✅ Create（作成）
+- ✅ Read（取得・一覧）
+- ✅ Update（更新）
+- ✅ Delete（削除）
+- ✅ カスタムエンドポイント（latest, active, history等）
+- ✅ バリデーションエラー
+- ✅ JSONBフィールドの検証
 
-	var patient models.Patient
-	json.NewDecoder(resp.Body).Decode(&patient)
-	assert.NotEmpty(t, patient.PatientID)
-}
-```
+### テストヘルパー機能
 
-## パフォーマンステスト
+`helpers.go`が提供する機能：
+- `SetupTestServer()` - テストサーバーの自動セットアップ
+- `CreateTestPatient()` - テスト患者の自動作成・クリーンアップ
+- `MakeRequest()` - HTTPリクエストヘルパー
+- `DecodeJSONResponse()` - JSONレスポンスデコードヘルパー
+- テスト認証ミドルウェア（実際の認証をバイパス）
+
+## パフォーマンステスト（未実装）
 
 ### Locustを使用した負荷テスト
 
