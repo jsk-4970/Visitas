@@ -18,7 +18,8 @@
       "Bash(go build:*)",
       "Bash(go mod tidy:*)",
       "Bash(grep:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(go test:*)"
     ]
   }
 }

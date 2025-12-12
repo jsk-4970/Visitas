@@ -7,27 +7,21 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
-	"github.com/visitas/backend/internal/repository"
+	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
 )
 
 // IdentifierHandler handles patient identifier-related HTTP requests
 type IdentifierHandler struct {
-	identifierRepo *repository.IdentifierRepository
-	patientRepo    *repository.PatientRepository
-	auditMiddleware *middleware.AuditLoggerMiddleware
+	identifierService *services.IdentifierService
 }
 
 // NewIdentifierHandler creates a new identifier handler
 func NewIdentifierHandler(
-	identifierRepo *repository.IdentifierRepository,
-	patientRepo *repository.PatientRepository,
-	auditMiddleware *middleware.AuditLoggerMiddleware,
+	identifierService *services.IdentifierService,
 ) *IdentifierHandler {
 	return &IdentifierHandler{
-		identifierRepo:  identifierRepo,
-		patientRepo:     patientRepo,
-		auditMiddleware: auditMiddleware,
+		identifierService: identifierService,
 	}
 }
 
@@ -58,25 +52,13 @@ func (h *IdentifierHandler) CreateIdentifier(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Check if user has access to this patient
-	hasAccess, err := h.patientRepo.CheckStaffAccess(r.Context(), userID, patientID)
+	// Create identifier via service layer (handles access control and encryption)
+	identifier, err := h.identifierService.CreateIdentifier(r.Context(), &req, userID)
 	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to check staff access", err)
-		respondError(w, http.StatusInternalServerError, "Failed to check access")
-		return
-	}
-
-	if !hasAccess {
-		logger.WarnContext(r.Context(), "Unauthorized access attempt", map[string]interface{}{
-			"patient_id": patientID,
-			"user_id":    userID,
-		})
-		respondError(w, http.StatusForbidden, "Access denied")
-		return
-	}
-
-	identifier, err := h.identifierRepo.CreateIdentifier(r.Context(), &req, userID)
-	if err != nil {
+		if err.Error() == "access denied: you do not have permission to add identifiers for this patient" {
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
 		logger.ErrorContext(r.Context(), "Failed to create identifier", err)
 		respondError(w, http.StatusInternalServerError, "Failed to create identifier")
 		return
@@ -104,40 +86,19 @@ func (h *IdentifierHandler) GetIdentifiers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Check if user has access to this patient
-	hasAccess, err := h.patientRepo.CheckStaffAccess(r.Context(), userID, patientID)
-	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to check staff access", err)
-		respondError(w, http.StatusInternalServerError, "Failed to check access")
-		return
-	}
-
-	if !hasAccess {
-		logger.WarnContext(r.Context(), "Unauthorized access attempt", map[string]interface{}{
-			"patient_id": patientID,
-			"user_id":    userID,
-		})
-		respondError(w, http.StatusForbidden, "Access denied")
-		return
-	}
-
 	// Check if decrypt parameter is set (only for authorized users)
 	decrypt := r.URL.Query().Get("decrypt") == "true"
 
-	identifiers, err := h.identifierRepo.GetIdentifiersByPatientID(r.Context(), patientID, decrypt)
+	// Get identifiers via service layer (handles access control, decryption, and audit logging)
+	identifiers, err := h.identifierService.GetIdentifiersByPatientID(r.Context(), patientID, userID, decrypt)
 	if err != nil {
+		if err.Error() == "access denied: you do not have permission to view this patient's identifiers" {
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
 		logger.ErrorContext(r.Context(), "Failed to get identifiers", err)
 		respondError(w, http.StatusInternalServerError, "Failed to get identifiers")
 		return
-	}
-
-	// If decryption was requested, log the audit trail for My Numbers
-	if decrypt {
-		for _, identifier := range identifiers {
-			if identifier.IsMyNumber() {
-				h.auditMiddleware.LogDecryptAccess(r.Context(), patientID, identifier.IdentifierID, userID)
-			}
-		}
 	}
 
 	response := models.PatientIdentifierListResponse{
@@ -169,40 +130,23 @@ func (h *IdentifierHandler) GetIdentifier(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Check if user has access to this patient
-	hasAccess, err := h.patientRepo.CheckStaffAccess(r.Context(), userID, patientID)
-	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to check staff access", err)
-		respondError(w, http.StatusInternalServerError, "Failed to check access")
-		return
-	}
-
-	if !hasAccess {
-		logger.WarnContext(r.Context(), "Unauthorized access attempt", map[string]interface{}{
-			"patient_id": patientID,
-			"user_id":    userID,
-		})
-		respondError(w, http.StatusForbidden, "Access denied")
-		return
-	}
-
 	// Check if decrypt parameter is set
 	decrypt := r.URL.Query().Get("decrypt") == "true"
 
-	identifier, err := h.identifierRepo.GetIdentifierByID(r.Context(), identifierID, decrypt)
+	// Get identifier via service layer (handles access control, decryption, and audit logging)
+	identifier, err := h.identifierService.GetIdentifier(r.Context(), identifierID, userID, decrypt)
 	if err != nil {
-		if err.Error() == "identifier not found" {
+		if err.Error() == "failed to get identifier: identifier not found" {
 			respondError(w, http.StatusNotFound, "Identifier not found")
-		} else {
-			logger.ErrorContext(r.Context(), "Failed to get identifier", err)
-			respondError(w, http.StatusInternalServerError, "Failed to get identifier")
+			return
 		}
+		if err.Error() == "access denied: you do not have permission to view this patient's identifiers" {
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
+		logger.ErrorContext(r.Context(), "Failed to get identifier", err)
+		respondError(w, http.StatusInternalServerError, "Failed to get identifier")
 		return
-	}
-
-	// Log decrypt access if My Number was decrypted
-	if decrypt && identifier.IsMyNumber() {
-		h.auditMiddleware.LogDecryptAccess(r.Context(), patientID, identifierID, userID)
 	}
 
 	respondJSON(w, http.StatusOK, identifier)
@@ -234,31 +178,19 @@ func (h *IdentifierHandler) UpdateIdentifier(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Check if user has access to this patient
-	hasAccess, err := h.patientRepo.CheckStaffAccess(r.Context(), userID, patientID)
+	// Update identifier via service layer (handles access control and encryption)
+	identifier, err := h.identifierService.UpdateIdentifier(r.Context(), identifierID, &req, userID)
 	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to check staff access", err)
-		respondError(w, http.StatusInternalServerError, "Failed to check access")
-		return
-	}
-
-	if !hasAccess {
-		logger.WarnContext(r.Context(), "Unauthorized access attempt", map[string]interface{}{
-			"patient_id": patientID,
-			"user_id":    userID,
-		})
-		respondError(w, http.StatusForbidden, "Access denied")
-		return
-	}
-
-	identifier, err := h.identifierRepo.UpdateIdentifier(r.Context(), identifierID, &req, userID)
-	if err != nil {
-		if err.Error() == "identifier not found" {
+		if err.Error() == "failed to get identifier: identifier not found" {
 			respondError(w, http.StatusNotFound, "Identifier not found")
-		} else {
-			logger.ErrorContext(r.Context(), "Failed to update identifier", err)
-			respondError(w, http.StatusInternalServerError, "Failed to update identifier")
+			return
 		}
+		if err.Error() == "access denied: you do not have permission to update this patient's identifiers" {
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
+		logger.ErrorContext(r.Context(), "Failed to update identifier", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update identifier")
 		return
 	}
 
@@ -286,25 +218,17 @@ func (h *IdentifierHandler) DeleteIdentifier(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Check if user has access to this patient
-	hasAccess, err := h.patientRepo.CheckStaffAccess(r.Context(), userID, patientID)
+	// Delete identifier via service layer (handles access control and audit logging)
+	err := h.identifierService.DeleteIdentifier(r.Context(), identifierID, userID)
 	if err != nil {
-		logger.ErrorContext(r.Context(), "Failed to check staff access", err)
-		respondError(w, http.StatusInternalServerError, "Failed to check access")
-		return
-	}
-
-	if !hasAccess {
-		logger.WarnContext(r.Context(), "Unauthorized access attempt", map[string]interface{}{
-			"patient_id": patientID,
-			"user_id":    userID,
-		})
-		respondError(w, http.StatusForbidden, "Access denied")
-		return
-	}
-
-	err = h.identifierRepo.DeleteIdentifier(r.Context(), identifierID)
-	if err != nil {
+		if err.Error() == "failed to get identifier: identifier not found" {
+			respondError(w, http.StatusNotFound, "Identifier not found")
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to delete this patient's identifiers" {
+			respondError(w, http.StatusForbidden, "Access denied")
+			return
+		}
 		logger.ErrorContext(r.Context(), "Failed to delete identifier", err)
 		respondError(w, http.StatusInternalServerError, "Failed to delete identifier")
 		return

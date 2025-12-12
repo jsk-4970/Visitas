@@ -339,6 +339,34 @@ func (r *AuditRepository) GetFailedAccessLogs(ctx context.Context, limit, offset
 	return logs, int(total), nil
 }
 
+// LogMyNumberAccess logs access to My Number identifiers (create, update, decrypt, delete)
+// This is a critical security function for HIPAA and 3省2ガイドライン compliance
+func (r *AuditRepository) LogMyNumberAccess(ctx context.Context, patientID, identifierID, action, actorID string) error {
+	log := &AuditLog{
+		LogID:      uuid.New().String(),
+		EventTime:  time.Now(),
+		ActorID:    actorID,
+		Action:     AuditAction(action),
+		ResourceID: identifierID,
+		PatientID:  patientID,
+		Success:    true,
+	}
+
+	// Add accessed fields metadata for My Number operations
+	accessedFields := map[string]string{
+		"resource_type": "patient_identifier",
+		"identifier_type": "my_number",
+		"operation": action,
+	}
+	accessedFieldsJSON, err := json.Marshal(accessedFields)
+	if err != nil {
+		return fmt.Errorf("failed to marshal accessed fields: %w", err)
+	}
+	log.AccessedFields = accessedFieldsJSON
+
+	return r.LogAccess(ctx, log)
+}
+
 // scanAuditLog scans a Spanner row into an AuditLog model
 func scanAuditLog(row *spanner.Row) (*AuditLog, error) {
 	var log AuditLog

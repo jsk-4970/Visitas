@@ -106,6 +106,7 @@ func main() {
 
 	// Initialize services
 	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
+	identifierService := services.NewIdentifierService(identifierRepo, patientRepo, auditRepo)
 	medicalConditionService := services.NewMedicalConditionService(medicalConditionRepo, patientRepo)
 	allergyIntoleranceService := services.NewAllergyIntoleranceService(allergyIntoleranceRepo, patientRepo)
 	socialProfileService := services.NewSocialProfileService(socialProfileRepo, patientRepo)
@@ -121,7 +122,7 @@ func main() {
 
 	// Initialize handlers
 	patientHandler := handlers.NewPatientHandler(patientService)
-	identifierHandler := handlers.NewIdentifierHandler(identifierRepo, patientRepo, auditMiddleware)
+	identifierHandler := handlers.NewIdentifierHandler(identifierService)
 	socialProfileHandler := handlers.NewSocialProfileHandler(socialProfileService)
 	coverageHandler := handlers.NewCoverageHandler(coverageService)
 	medicalConditionHandler := handlers.NewMedicalConditionHandler(medicalConditionService)

@@ -45,6 +45,16 @@ tags:
     description: 病名・既往歴管理 (FHIR準拠)
   - name: Allergy Intolerances
     description: アレルギー・副作用歴管理 (FHIR準拠)
+  - name: Visit Schedules
+    description: 訪問スケジュール管理 (Phase 1)
+  - name: Clinical Observations
+    description: バイタル・ADL評価管理 (Phase 1, FHIR準拠)
+  - name: Care Plans
+    description: ケア計画管理 (Phase 1, FHIR準拠)
+  - name: Medication Orders
+    description: 処方オーダー管理 (Phase 1, FHIR準拠)
+  - name: ACP Records
+    description: ACP (事前ケア計画) 記録管理 (Phase 1)
   - name: Health
     description: ヘルスチェック
 
@@ -612,6 +622,497 @@ paths:
         '200':
           description: 削除成功
 
+  # Patient Identifiers (Phase 1 - Implemented)
+  /patients/{patientId}/identifiers:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Patient Identifiers
+      summary: 患者識別子一覧取得
+      description: |
+        患者の識別子（マイナンバー、保険証番号等）を取得します。
+        マイナンバーは暗号化されて保存されており、decrypt=trueパラメータで復号化可能です。
+      parameters:
+        - name: decrypt
+          in: query
+          description: マイナンバーを復号化して返却
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  identifiers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PatientIdentifier'
+                  total:
+                    type: integer
+
+    post:
+      tags:
+        - Patient Identifiers
+      summary: 患者識別子作成
+      description: マイナンバーは自動的にKMS暗号化されます
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientIdentifierCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  identifier_id:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+                  message:
+                    type: string
+
+  /patients/{patientId}/identifiers/{identifierId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: identifierId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Patient Identifiers
+      summary: 患者識別子詳細取得
+      parameters:
+        - name: decrypt
+          in: query
+          description: マイナンバーを復号化して返却
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientIdentifier'
+
+    put:
+      tags:
+        - Patient Identifiers
+      summary: 患者識別子更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientIdentifierUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Patient Identifiers
+      summary: 患者識別子削除
+      responses:
+        '200':
+          description: 削除成功
+
+  # Visit Schedules (Phase 1 - Implemented)
+  /patients/{patientId}/schedules:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Visit Schedules
+      summary: 訪問スケジュール一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisitSchedule'
+
+    post:
+      tags:
+        - Visit Schedules
+      summary: 訪問スケジュール作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitScheduleCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+
+  /patients/{patientId}/schedules/{scheduleId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: scheduleId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Visit Schedules
+      summary: 訪問スケジュール詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitSchedule'
+
+    put:
+      tags:
+        - Visit Schedules
+      summary: 訪問スケジュール更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitScheduleUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Visit Schedules
+      summary: 訪問スケジュール削除
+      responses:
+        '200':
+          description: 削除成功
+
+  # Clinical Observations (Phase 1 - Implemented)
+  /patients/{patientId}/observations:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Clinical Observations
+      summary: バイタル・ADL評価一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClinicalObservation'
+
+    post:
+      tags:
+        - Clinical Observations
+      summary: バイタル・ADL評価作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicalObservationCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+
+  /patients/{patientId}/observations/{observationId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: observationId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Clinical Observations
+      summary: バイタル・ADL評価詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicalObservation'
+
+    put:
+      tags:
+        - Clinical Observations
+      summary: バイタル・ADL評価更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicalObservationUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Clinical Observations
+      summary: バイタル・ADL評価削除
+      responses:
+        '200':
+          description: 削除成功
+
+  # Care Plans (Phase 1 - Implemented)
+  /patients/{patientId}/care-plans:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Care Plans
+      summary: ケア計画一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CarePlan'
+
+    post:
+      tags:
+        - Care Plans
+      summary: ケア計画作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarePlanCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+
+  /patients/{patientId}/care-plans/{carePlanId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: carePlanId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Care Plans
+      summary: ケア計画詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarePlan'
+
+    put:
+      tags:
+        - Care Plans
+      summary: ケア計画更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarePlanUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Care Plans
+      summary: ケア計画削除
+      responses:
+        '200':
+          description: 削除成功
+
+  # Medication Orders (Phase 1 - Implemented)
+  /patients/{patientId}/medication-orders:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Medication Orders
+      summary: 処方オーダー一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicationOrder'
+
+    post:
+      tags:
+        - Medication Orders
+      summary: 処方オーダー作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicationOrderCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+
+  /patients/{patientId}/medication-orders/{orderId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Medication Orders
+      summary: 処方オーダー詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicationOrder'
+
+    put:
+      tags:
+        - Medication Orders
+      summary: 処方オーダー更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicationOrderUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Medication Orders
+      summary: 処方オーダー削除
+      responses:
+        '200':
+          description: 削除成功
+
+  # ACP Records (Phase 1 - Implemented)
+  /patients/{patientId}/acp-records:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - ACP Records
+      summary: ACP記録一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ACPRecord'
+
+    post:
+      tags:
+        - ACP Records
+      summary: ACP記録作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ACPRecordCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+
+  /patients/{patientId}/acp-records/{recordId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: recordId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - ACP Records
+      summary: ACP記録詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ACPRecord'
+
+    put:
+      tags:
+        - ACP Records
+      summary: ACP記録更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ACPRecordUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - ACP Records
+      summary: ACP記録削除
+      responses:
+        '200':
+          description: 削除成功
+
 components:
   securitySchemes:
     BearerAuth:
@@ -903,6 +1404,137 @@ components:
           type: integer
         has_more:
           type: boolean
+
+    PatientIdentifier:
+      type: object
+      required:
+        - identifier_id
+        - patient_id
+        - identifier_type
+        - identifier_value
+      properties:
+        identifier_id:
+          type: string
+          format: uuid
+          description: 識別子ID
+        patient_id:
+          type: string
+          format: uuid
+          description: 患者ID
+        identifier_type:
+          type: string
+          enum: [my_number, insurance_id, care_insurance_id, mrn, other]
+          description: |
+            識別子タイプ
+            - my_number: マイナンバー（KMS暗号化）
+            - insurance_id: 健康保険証番号
+            - care_insurance_id: 介護保険証番号
+            - mrn: Medical Record Number（カルテ番号）
+            - other: その他
+        identifier_value:
+          type: string
+          description: 識別子の値（マイナンバーの場合は暗号化済み、decrypt=trueで復号化可能）
+        is_primary:
+          type: boolean
+          description: このタイプの主要識別子かどうか
+          default: false
+        issuer_name:
+          type: string
+          description: 発行機関名（保険証等）
+        issuer_code:
+          type: string
+          description: 発行機関コード
+        valid_from:
+          type: string
+          format: date-time
+          description: 有効期間開始
+        valid_to:
+          type: string
+          format: date-time
+          description: 有効期間終了
+        verification_status:
+          type: string
+          enum: [verified, unverified, expired, invalid]
+          description: 検証ステータス
+          default: unverified
+        verified_by:
+          type: string
+          description: 検証者ID
+        verified_at:
+          type: string
+          format: date-time
+          description: 検証日時
+        notes:
+          type: string
+          description: 備考
+        deleted:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+
+    PatientIdentifierCreateRequest:
+      type: object
+      required:
+        - identifier_type
+        - identifier_value
+      properties:
+        identifier_type:
+          type: string
+          enum: [my_number, insurance_id, care_insurance_id, mrn, other]
+        identifier_value:
+          type: string
+          description: 識別子の値（マイナンバーは12桁の数字）
+        is_primary:
+          type: boolean
+          default: false
+        issuer_name:
+          type: string
+          description: 保険証の場合は必須
+        issuer_code:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        notes:
+          type: string
+
+    PatientIdentifierUpdateRequest:
+      type: object
+      properties:
+        is_primary:
+          type: boolean
+        issuer_name:
+          type: string
+        issuer_code:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        verification_status:
+          type: string
+          enum: [verified, unverified, expired, invalid]
+        verified_by:
+          type: string
+        verified_at:
+          type: string
+          format: date-time
+        notes:
+          type: string
 
     SocialProfile:
       type: object
