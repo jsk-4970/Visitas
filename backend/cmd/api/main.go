@@ -94,6 +94,10 @@ func main() {
 	identifierRepo := repository.NewIdentifierRepository(spannerRepo, kmsEncryptor)
 	assignmentRepo := repository.NewAssignmentRepository(spannerRepo)
 	auditRepo := repository.NewAuditRepository(spannerRepo)
+	socialProfileRepo := repository.NewSocialProfileRepository(spannerRepo)
+	coverageRepo := repository.NewCoverageRepository(spannerRepo)
+	medicalConditionRepo := repository.NewMedicalConditionRepository(spannerRepo)
+	allergyIntoleranceRepo := repository.NewAllergyIntoleranceRepository(spannerRepo)
 
 	// Initialize services
 	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
@@ -104,6 +108,10 @@ func main() {
 	// Initialize handlers
 	patientHandler := handlers.NewPatientHandler(patientService)
 	identifierHandler := handlers.NewIdentifierHandler(identifierRepo, patientRepo, auditMiddleware)
+	socialProfileHandler := handlers.NewSocialProfileHandler(socialProfileRepo, patientRepo)
+	coverageHandler := handlers.NewCoverageHandler(coverageRepo, patientRepo)
+	medicalConditionHandler := handlers.NewMedicalConditionHandler(medicalConditionRepo, patientRepo)
+	allergyIntoleranceHandler := handlers.NewAllergyIntoleranceHandler(allergyIntoleranceRepo, patientRepo)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -159,6 +167,43 @@ func main() {
 			r.Get("/{id}", identifierHandler.GetIdentifier)    // Get identifier by ID
 			r.Put("/{id}", identifierHandler.UpdateIdentifier) // Update identifier
 			r.Delete("/{id}", identifierHandler.DeleteIdentifier) // Delete identifier
+		})
+
+		// Social profile routes (protected)
+		r.Route("/patients/{patient_id}/social-profiles", func(r chi.Router) {
+			r.Get("/", socialProfileHandler.GetSocialProfiles)       // List social profiles
+			r.Post("/", socialProfileHandler.CreateSocialProfile)    // Create social profile
+			r.Get("/{id}", socialProfileHandler.GetSocialProfile)    // Get social profile by ID
+			r.Put("/{id}", socialProfileHandler.UpdateSocialProfile) // Update social profile
+			r.Delete("/{id}", socialProfileHandler.DeleteSocialProfile) // Delete social profile
+		})
+
+		// Coverage routes (protected)
+		r.Route("/patients/{patient_id}/coverages", func(r chi.Router) {
+			r.Get("/", coverageHandler.GetCoverages)       // List coverages
+			r.Post("/", coverageHandler.CreateCoverage)    // Create coverage
+			r.Get("/{id}", coverageHandler.GetCoverage)    // Get coverage by ID
+			r.Put("/{id}", coverageHandler.UpdateCoverage) // Update coverage
+			r.Delete("/{id}", coverageHandler.DeleteCoverage) // Delete coverage
+			r.Post("/{id}/verify", coverageHandler.VerifyCoverage) // Verify coverage
+		})
+
+		// Medical condition routes (protected)
+		r.Route("/patients/{patient_id}/conditions", func(r chi.Router) {
+			r.Get("/", medicalConditionHandler.GetMedicalConditions)       // List medical conditions
+			r.Post("/", medicalConditionHandler.CreateMedicalCondition)    // Create medical condition
+			r.Get("/{id}", medicalConditionHandler.GetMedicalCondition)    // Get medical condition by ID
+			r.Put("/{id}", medicalConditionHandler.UpdateMedicalCondition) // Update medical condition
+			r.Delete("/{id}", medicalConditionHandler.DeleteMedicalCondition) // Delete medical condition
+		})
+
+		// Allergy intolerance routes (protected)
+		r.Route("/patients/{patient_id}/allergies", func(r chi.Router) {
+			r.Get("/", allergyIntoleranceHandler.GetAllergyIntolerances)       // List allergy intolerances
+			r.Post("/", allergyIntoleranceHandler.CreateAllergyIntolerance)    // Create allergy intolerance
+			r.Get("/{id}", allergyIntoleranceHandler.GetAllergyIntolerance)    // Get allergy intolerance by ID
+			r.Put("/{id}", allergyIntoleranceHandler.UpdateAllergyIntolerance) // Update allergy intolerance
+			r.Delete("/{id}", allergyIntoleranceHandler.DeleteAllergyIntolerance) // Delete allergy intolerance
 		})
 	})
 

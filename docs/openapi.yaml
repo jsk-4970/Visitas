@@ -37,6 +37,14 @@ tags:
     description: 患者マスターデータ管理
   - name: Patient Identifiers
     description: 患者識別子管理 (マイナンバー、保険証番号等)
+  - name: Social Profiles
+    description: 患者社会的背景管理 (独居状況、介護者情報等)
+  - name: Coverages
+    description: 保険情報管理 (医療保険、介護保険、公費負担)
+  - name: Medical Conditions
+    description: 病名・既往歴管理 (FHIR準拠)
+  - name: Allergy Intolerances
+    description: アレルギー・副作用歴管理 (FHIR準拠)
   - name: Health
     description: ヘルスチェック
 
@@ -206,6 +214,403 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+
+  /patients/{patientId}/social-profiles:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Social Profiles
+      summary: 社会的背景一覧取得
+      parameters:
+        - name: current_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: 現在有効なプロファイルのみ取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SocialProfile'
+                  total:
+                    type: integer
+
+    post:
+      tags:
+        - Social Profiles
+      summary: 社会的背景登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialProfileCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile_id:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+                  message:
+                    type: string
+
+  /patients/{patientId}/social-profiles/{profileId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: profileId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Social Profiles
+      summary: 社会的背景詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialProfile'
+
+    put:
+      tags:
+        - Social Profiles
+      summary: 社会的背景更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialProfileUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Social Profiles
+      summary: 社会的背景削除
+      responses:
+        '200':
+          description: 削除成功
+
+  /patients/{patientId}/coverages:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Coverages
+      summary: 保険情報一覧取得
+      parameters:
+        - name: insurance_type
+          in: query
+          schema:
+            type: string
+            enum: [medical, long_term_care, public_expense]
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coverages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Coverage'
+                  total:
+                    type: integer
+
+    post:
+      tags:
+        - Coverages
+      summary: 保険情報登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coverage_id:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+  /patients/{patientId}/coverages/{coverageId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: coverageId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Coverages
+      summary: 保険情報詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Coverage'
+
+    put:
+      tags:
+        - Coverages
+      summary: 保険情報更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Coverages
+      summary: 保険情報削除
+      responses:
+        '200':
+          description: 削除成功
+
+  /patients/{patientId}/conditions:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Medical Conditions
+      summary: 病名・既往歴一覧取得
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conditions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MedicalCondition'
+                  total:
+                    type: integer
+
+    post:
+      tags:
+        - Medical Conditions
+      summary: 病名・既往歴登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalConditionCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  condition_id:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+  /patients/{patientId}/conditions/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: conditionId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Medical Conditions
+      summary: 病名詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalCondition'
+
+    put:
+      tags:
+        - Medical Conditions
+      summary: 病名更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalConditionUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Medical Conditions
+      summary: 病名削除
+      responses:
+        '200':
+          description: 削除成功
+
+  /patients/{patientId}/allergies:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Allergy Intolerances
+      summary: アレルギー情報一覧取得
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: medication_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allergies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AllergyIntolerance'
+                  total:
+                    type: integer
+
+    post:
+      tags:
+        - Allergy Intolerances
+      summary: アレルギー情報登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllergyIntoleranceCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allergy_id:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+  /patients/{patientId}/allergies/{allergyId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: allergyId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Allergy Intolerances
+      summary: アレルギー情報詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllergyIntolerance'
+
+    put:
+      tags:
+        - Allergy Intolerances
+      summary: アレルギー情報更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllergyIntoleranceUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+
+    delete:
+      tags:
+        - Allergy Intolerances
+      summary: アレルギー情報削除
+      responses:
+        '200':
+          description: 削除成功
 
 components:
   securitySchemes:
@@ -498,6 +903,379 @@ components:
           type: integer
         has_more:
           type: boolean
+
+    SocialProfile:
+      type: object
+      required:
+        - profile_id
+        - patient_id
+        - content
+      properties:
+        profile_id:
+          type: string
+        patient_id:
+          type: string
+        profile_version:
+          type: integer
+        content:
+          type: object
+          description: JSONB content with living situation, key persons, financial background
+        lives_alone:
+          type: boolean
+          readOnly: true
+        requires_caregiver_support:
+          type: boolean
+          readOnly: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        assessed_by:
+          type: string
+        assessed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SocialProfileCreateRequest:
+      type: object
+      required:
+        - patient_id
+        - content
+        - valid_from
+      properties:
+        patient_id:
+          type: string
+        content:
+          type: object
+        valid_from:
+          type: string
+          format: date-time
+        assessed_by:
+          type: string
+        assessed_at:
+          type: string
+          format: date-time
+
+    SocialProfileUpdateRequest:
+      type: object
+      properties:
+        content:
+          type: object
+        valid_to:
+          type: string
+          format: date-time
+        assessment_notes:
+          type: string
+
+    Coverage:
+      type: object
+      required:
+        - coverage_id
+        - patient_id
+        - insurance_type
+        - details
+      properties:
+        coverage_id:
+          type: string
+        patient_id:
+          type: string
+        insurance_type:
+          type: string
+          enum: [medical, long_term_care, public_expense]
+        details:
+          type: object
+          description: JSONB insurance details
+        care_level_code:
+          type: string
+          readOnly: true
+        copay_rate:
+          type: integer
+          readOnly: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, expired, suspended, terminated]
+        priority:
+          type: integer
+          minimum: 1
+        verification_status:
+          type: string
+        verified_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CoverageCreateRequest:
+      type: object
+      required:
+        - patient_id
+        - insurance_type
+        - details
+        - valid_from
+        - status
+        - priority
+      properties:
+        patient_id:
+          type: string
+        insurance_type:
+          type: string
+          enum: [medical, long_term_care, public_expense]
+        details:
+          type: object
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          type: string
+        priority:
+          type: integer
+
+    CoverageUpdateRequest:
+      type: object
+      properties:
+        details:
+          type: object
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          type: string
+        priority:
+          type: integer
+        verification_status:
+          type: string
+
+    MedicalCondition:
+      type: object
+      required:
+        - condition_id
+        - patient_id
+        - clinical_status
+        - verification_status
+        - display_name
+      properties:
+        condition_id:
+          type: string
+        patient_id:
+          type: string
+        clinical_status:
+          type: string
+          enum: [active, recurrence, relapse, inactive, remission, resolved]
+        verification_status:
+          type: string
+          enum: [unconfirmed, provisional, differential, confirmed, refuted, entered-in-error]
+        category:
+          type: string
+        severity:
+          type: string
+          enum: [mild, moderate, severe, life-threatening]
+        code_system:
+          type: string
+        code:
+          type: string
+        display_name:
+          type: string
+        body_site:
+          type: string
+        onset_date:
+          type: string
+          format: date
+        onset_age:
+          type: integer
+        abatement_date:
+          type: string
+          format: date
+        clinical_notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MedicalConditionCreateRequest:
+      type: object
+      required:
+        - patient_id
+        - clinical_status
+        - verification_status
+        - display_name
+      properties:
+        patient_id:
+          type: string
+        clinical_status:
+          type: string
+        verification_status:
+          type: string
+        category:
+          type: string
+        severity:
+          type: string
+        code_system:
+          type: string
+        code:
+          type: string
+        display_name:
+          type: string
+        onset_date:
+          type: string
+          format: date
+        clinical_notes:
+          type: string
+
+    MedicalConditionUpdateRequest:
+      type: object
+      properties:
+        clinical_status:
+          type: string
+        verification_status:
+          type: string
+        severity:
+          type: string
+        abatement_date:
+          type: string
+          format: date
+        clinical_notes:
+          type: string
+
+    AllergyIntolerance:
+      type: object
+      required:
+        - allergy_id
+        - patient_id
+        - clinical_status
+        - verification_status
+        - type
+        - category
+        - criticality
+        - display_name
+      properties:
+        allergy_id:
+          type: string
+        patient_id:
+          type: string
+        clinical_status:
+          type: string
+          enum: [active, inactive, resolved]
+        verification_status:
+          type: string
+          enum: [unconfirmed, confirmed, refuted]
+        type:
+          type: string
+          enum: [allergy, intolerance]
+        category:
+          type: string
+          enum: [food, medication, environment, biologic]
+        criticality:
+          type: string
+          enum: [low, high, unable-to-assess]
+        code_system:
+          type: string
+        code:
+          type: string
+        display_name:
+          type: string
+        reactions:
+          type: array
+          items:
+            type: object
+        max_severity:
+          type: string
+          readOnly: true
+        onset_date:
+          type: string
+          format: date
+        last_occurrence_date:
+          type: string
+          format: date
+        clinical_notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AllergyIntoleranceCreateRequest:
+      type: object
+      required:
+        - patient_id
+        - clinical_status
+        - verification_status
+        - type
+        - category
+        - criticality
+        - display_name
+      properties:
+        patient_id:
+          type: string
+        clinical_status:
+          type: string
+        verification_status:
+          type: string
+        type:
+          type: string
+        category:
+          type: string
+        criticality:
+          type: string
+        code_system:
+          type: string
+        code:
+          type: string
+        display_name:
+          type: string
+        reactions:
+          type: array
+          items:
+            type: object
+        onset_date:
+          type: string
+          format: date
+        clinical_notes:
+          type: string
+
+    AllergyIntoleranceUpdateRequest:
+      type: object
+      properties:
+        clinical_status:
+          type: string
+        verification_status:
+          type: string
+        criticality:
+          type: string
+        reactions:
+          type: array
+          items:
+            type: object
+        last_occurrence_date:
+          type: string
+          format: date
+        clinical_notes:
+          type: string
 
     Error:
       type: object
