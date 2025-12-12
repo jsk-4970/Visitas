@@ -11,7 +11,12 @@
       "Bash(ls:*)",
       "Bash(__NEW_LINE__ cd backend/migrations)",
       "Bash(echo \"=== 重複ファイルを確認 ===\" ls -1 *.sql)",
-      "Bash(do echo '--- $num ---' ls -lh $num_*.sql)"
+      "Bash(do echo '--- $num ---' ls -lh $num_*.sql)",
+      "Bash(go version:*)",
+      "Bash(go env:*)",
+      "Bash(go mod download:*)",
+      "Bash(go build:*)",
+      "Bash(go mod tidy:*)"
     ]
   }
 }

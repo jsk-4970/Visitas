@@ -132,8 +132,8 @@ cp .env.example .env
 # GCP設定
 GCP_PROJECT_ID=stunning-grin-480914-n1
 GCP_REGION=asia-northeast1
-SPANNER_INSTANCE=visitas-instance
-SPANNER_DATABASE=visitas-db
+SPANNER_INSTANCE=stunning-grin-480914-n1-instance
+SPANNER_DATABASE=stunning-grin-480914-n1-db
 
 # Firebase設定
 FIREBASE_CONFIG_PATH=./config/firebase-config.json
@@ -188,20 +188,20 @@ done
 
 ```bash
 # Spannerインスタンスの作成(初回のみ)
-gcloud spanner instances create visitas-instance \
+gcloud spanner instances create stunning-grin-480914-n1-instance \
   --config=regional-asia-northeast1 \
   --description="Visitas Production Instance" \
   --nodes=1
 
 # データベースの作成
-gcloud spanner databases create visitas-db \
-  --instance=visitas-instance \
+gcloud spanner databases create stunning-grin-480914-n1-db \
+  --instance=stunning-grin-480914-n1-instance \
   --database-dialect=POSTGRESQL
 
 # マイグレーションの適用
 cd backend/migrations
-gcloud spanner databases ddl update visitas-db \
-  --instance=visitas-instance \
+gcloud spanner databases ddl update stunning-grin-480914-n1-db \
+  --instance=stunning-grin-480914-n1-instance \
   --ddl="$(cat 001_create_patients.sql)"
 ```
 

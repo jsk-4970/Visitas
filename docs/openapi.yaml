@@ -429,6 +429,10 @@ components:
         - given
         - kana
       properties:
+        use:
+          type: string
+          enum: [official, maiden, nickname]
+          example: official
         family:
           type: string
           example: 山田
@@ -441,20 +445,41 @@ components:
         previous_names:
           type: array
           items:
-            type: object
-            properties:
-              family:
-                type: string
-              given:
-                type: string
-              period_end:
-                type: string
-                format: date
-              change_reason:
-                type: string
+            $ref: '#/components/schemas/PreviousName'
+
+    PreviousName:
+      type: object
+      required:
+        - family
+        - given
+        - period
+      properties:
+        family:
+          type: string
+        given:
+          type: string
+        period:
+          $ref: '#/components/schemas/Period'
+        change_reason:
+          type: string
+          description: 婚姻, 離婚, etc.
+
+    Period:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
 
     ContactPoint:
       type: object
+      required:
+        - system
+        - value
+        - rank
       properties:
         system:
           type: string
@@ -467,13 +492,24 @@ components:
         rank:
           type: integer
           minimum: 1
+          description: 1 = primary
+        verified_at:
+          type: string
+          format: date-time
 
     Address:
       type: object
+      required:
+        - use
+        - prefecture
+        - city
+        - line
+        - valid_from
       properties:
         use:
           type: string
-          enum: [home, work, temp, facility]
+          enum: [home, billing]
+          description: home or billing
         postal_code:
           type: string
         prefecture:
@@ -482,8 +518,19 @@ components:
           type: string
         line:
           type: string
+          description: Street address
+        building:
+          type: string
         geolocation:
           $ref: '#/components/schemas/GeoLocation'
+        access_instructions:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
 
     GeoLocation:
       type: object
@@ -504,6 +551,11 @@ components:
 
     SocialProfile:
       type: object
+      required:
+        - profile_id
+        - patient_id
+        - profile_version
+        - content
       properties:
         profile_id:
           type: string
@@ -511,21 +563,58 @@ components:
         patient_id:
           type: string
           format: uuid
-        recorded_at:
-          type: string
-          format: date-time
-        author_id:
-          type: string
-          format: uuid
+        profile_version:
+          type: integer
+          description: Version number for tracking changes
         content:
           type: object
           description: JSONB構造の社会的背景データ
-        data_sensitivity:
+        lives_alone:
+          type: boolean
+          description: Generated column for fast queries
+        requires_caregiver_support:
+          type: boolean
+          description: Generated column for fast queries
+        valid_from:
           type: string
-          enum: [confidential, highly_confidential]
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        assessed_by:
+          type: string
+          format: uuid
+        assessed_at:
+          type: string
+          format: date-time
+        assessment_notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+          format: uuid
+        deleted:
+          type: boolean
+        deleted_at:
+          type: string
+          format: date-time
 
     Coverage:
       type: object
+      required:
+        - coverage_id
+        - patient_id
+        - insurance_type
+        - status
+        - priority
       properties:
         coverage_id:
           type: string
@@ -536,20 +625,53 @@ components:
         insurance_type:
           type: string
           enum: [medical, long_term_care, public_expense]
-        payer_organization:
-          type: string
-        valid_from:
-          type: string
-          format: date
-        valid_to:
-          type: string
-          format: date
-        status:
-          type: string
-          enum: [active, cancelled, draft, entered-in-error]
         details:
           type: object
           description: 保険詳細(JSONB)
+        care_level_code:
+          type: string
+          description: For long_term_care (要支援1-2, 要介護1-5)
+        copay_rate:
+          type: integer
+          description: Percentage
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, expired, suspended, terminated]
+        priority:
+          type: integer
+          minimum: 1
+          description: Lower number = higher priority
+        verification_status:
+          type: string
+        verified_at:
+          type: string
+          format: date-time
+        verified_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+          format: uuid
+        deleted:
+          type: boolean
+        deleted_at:
+          type: string
+          format: date-time
 
     Observation:
       type: object
@@ -622,32 +744,59 @@ components:
     SocialProfileCreateRequest:
       type: object
       required:
+        - patient_id
         - content
+        - valid_from
       properties:
+        patient_id:
+          type: string
+          format: uuid
         content:
           type: object
           description: 社会的背景の詳細(JSONB)
+        valid_from:
+          type: string
+          format: date-time
+        assessed_by:
+          type: string
+          format: uuid
+        assessed_at:
+          type: string
+          format: date-time
+        assessment_notes:
+          type: string
 
     CoverageCreateRequest:
       type: object
       required:
+        - patient_id
         - insurance_type
         - valid_from
         - details
+        - status
+        - priority
       properties:
+        patient_id:
+          type: string
+          format: uuid
         insurance_type:
           type: string
           enum: [medical, long_term_care, public_expense]
-        payer_organization:
-          type: string
-        valid_from:
-          type: string
-          format: date
-        valid_to:
-          type: string
-          format: date
         details:
           type: object
+          description: 保険詳細(JSONB)
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, expired, suspended, terminated]
+        priority:
+          type: integer
+          minimum: 1
 
     Pagination:
       type: object
