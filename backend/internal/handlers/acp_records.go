@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
 	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
@@ -29,6 +30,13 @@ func (h *ACPRecordHandler) CreateACPRecord(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.ACPRecordCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -36,11 +44,15 @@ func (h *ACPRecordHandler) CreateACPRecord(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	record, err := h.acpRecordService.CreateACPRecord(ctx, patientID, &req)
+	record, err := h.acpRecordService.CreateACPRecord(ctx, patientID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to create ACP record", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to create ACP records for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -58,9 +70,20 @@ func (h *ACPRecordHandler) GetACPRecord(w http.ResponseWriter, r *http.Request) 
 	patientID := chi.URLParam(r, "patient_id")
 	acpID := chi.URLParam(r, "id")
 
-	record, err := h.acpRecordService.GetACPRecord(ctx, patientID, acpID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	record, err := h.acpRecordService.GetACPRecord(ctx, patientID, acpID, userID)
 	if err != nil {
 		logger.Error("Failed to get ACP record", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's ACP records" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "ACP record not found", http.StatusNotFound)
 		return
 	}
@@ -73,6 +96,13 @@ func (h *ACPRecordHandler) GetACPRecord(w http.ResponseWriter, r *http.Request) 
 func (h *ACPRecordHandler) GetACPRecords(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse query parameters
 	filter := &models.ACPRecordFilter{
@@ -129,9 +159,13 @@ func (h *ACPRecordHandler) GetACPRecords(w http.ResponseWriter, r *http.Request)
 		filter.Offset = offset
 	}
 
-	records, err := h.acpRecordService.ListACPRecords(ctx, filter)
+	records, err := h.acpRecordService.ListACPRecords(ctx, filter, userID)
 	if err != nil {
 		logger.Error("Failed to list ACP records", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's ACP records" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Failed to retrieve ACP records", http.StatusInternalServerError)
 		return
 	}
@@ -146,6 +180,13 @@ func (h *ACPRecordHandler) UpdateACPRecord(w http.ResponseWriter, r *http.Reques
 	patientID := chi.URLParam(r, "patient_id")
 	acpID := chi.URLParam(r, "id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.ACPRecordUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -153,11 +194,15 @@ func (h *ACPRecordHandler) UpdateACPRecord(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	record, err := h.acpRecordService.UpdateACPRecord(ctx, patientID, acpID, &req)
+	record, err := h.acpRecordService.UpdateACPRecord(ctx, patientID, acpID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to update ACP record", err)
 		if err.Error() == "ACP record not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to update ACP records for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -174,9 +219,20 @@ func (h *ACPRecordHandler) DeleteACPRecord(w http.ResponseWriter, r *http.Reques
 	patientID := chi.URLParam(r, "patient_id")
 	acpID := chi.URLParam(r, "id")
 
-	err := h.acpRecordService.DeleteACPRecord(ctx, patientID, acpID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.acpRecordService.DeleteACPRecord(ctx, patientID, acpID, userID)
 	if err != nil {
 		logger.Error("Failed to delete ACP record", err)
+		if err.Error() == "access denied: you do not have permission to delete ACP records for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -189,7 +245,14 @@ func (h *ACPRecordHandler) GetLatestACP(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
-	record, err := h.acpRecordService.GetLatestACP(ctx, patientID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	record, err := h.acpRecordService.GetLatestACP(ctx, patientID, userID)
 	if err != nil {
 		logger.Error("Failed to get latest ACP record", err)
 		if err.Error() == "patient not found" {
@@ -198,6 +261,10 @@ func (h *ACPRecordHandler) GetLatestACP(w http.ResponseWriter, r *http.Request) 
 		}
 		if err.Error() == "no active ACP record found for patient" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's ACP records" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, "Failed to retrieve latest ACP record", http.StatusInternalServerError)
@@ -213,11 +280,22 @@ func (h *ACPRecordHandler) GetACPHistory(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
-	records, err := h.acpRecordService.GetACPHistory(ctx, patientID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	records, err := h.acpRecordService.GetACPHistory(ctx, patientID, userID)
 	if err != nil {
 		logger.Error("Failed to get ACP history", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's ACP records" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, "Failed to retrieve ACP history", http.StatusInternalServerError)

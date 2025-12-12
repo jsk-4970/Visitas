@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
 	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
@@ -29,6 +30,13 @@ func (h *MedicationOrderHandler) CreateMedicationOrder(w http.ResponseWriter, r 
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.MedicationOrderCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -36,11 +44,15 @@ func (h *MedicationOrderHandler) CreateMedicationOrder(w http.ResponseWriter, r 
 		return
 	}
 
-	order, err := h.medicationOrderService.CreateMedicationOrder(ctx, patientID, &req)
+	order, err := h.medicationOrderService.CreateMedicationOrder(ctx, patientID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to create medication order", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to create medication orders for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -58,9 +70,20 @@ func (h *MedicationOrderHandler) GetMedicationOrder(w http.ResponseWriter, r *ht
 	patientID := chi.URLParam(r, "patient_id")
 	orderID := chi.URLParam(r, "id")
 
-	order, err := h.medicationOrderService.GetMedicationOrder(ctx, patientID, orderID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	order, err := h.medicationOrderService.GetMedicationOrder(ctx, patientID, orderID, userID)
 	if err != nil {
 		logger.Error("Failed to get medication order", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's medication orders" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Medication order not found", http.StatusNotFound)
 		return
 	}
@@ -73,6 +96,13 @@ func (h *MedicationOrderHandler) GetMedicationOrder(w http.ResponseWriter, r *ht
 func (h *MedicationOrderHandler) GetMedicationOrders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse query parameters
 	filter := &models.MedicationOrderFilter{
@@ -139,9 +169,13 @@ func (h *MedicationOrderHandler) GetMedicationOrders(w http.ResponseWriter, r *h
 		filter.Offset = offset
 	}
 
-	orders, err := h.medicationOrderService.ListMedicationOrders(ctx, filter)
+	orders, err := h.medicationOrderService.ListMedicationOrders(ctx, filter, userID)
 	if err != nil {
 		logger.Error("Failed to list medication orders", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's medication orders" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Failed to retrieve medication orders", http.StatusInternalServerError)
 		return
 	}
@@ -156,6 +190,13 @@ func (h *MedicationOrderHandler) UpdateMedicationOrder(w http.ResponseWriter, r 
 	patientID := chi.URLParam(r, "patient_id")
 	orderID := chi.URLParam(r, "id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.MedicationOrderUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -163,11 +204,15 @@ func (h *MedicationOrderHandler) UpdateMedicationOrder(w http.ResponseWriter, r 
 		return
 	}
 
-	order, err := h.medicationOrderService.UpdateMedicationOrder(ctx, patientID, orderID, &req)
+	order, err := h.medicationOrderService.UpdateMedicationOrder(ctx, patientID, orderID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to update medication order", err)
 		if err.Error() == "medication order not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to update medication orders for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -184,9 +229,20 @@ func (h *MedicationOrderHandler) DeleteMedicationOrder(w http.ResponseWriter, r 
 	patientID := chi.URLParam(r, "patient_id")
 	orderID := chi.URLParam(r, "id")
 
-	err := h.medicationOrderService.DeleteMedicationOrder(ctx, patientID, orderID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.medicationOrderService.DeleteMedicationOrder(ctx, patientID, orderID, userID)
 	if err != nil {
 		logger.Error("Failed to delete medication order", err)
+		if err.Error() == "access denied: you do not have permission to delete medication orders for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -199,11 +255,22 @@ func (h *MedicationOrderHandler) GetActiveOrders(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
-	orders, err := h.medicationOrderService.GetActiveOrders(ctx, patientID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	orders, err := h.medicationOrderService.GetActiveOrders(ctx, patientID, userID)
 	if err != nil {
 		logger.Error("Failed to get active orders", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's medication orders" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, "Failed to retrieve active medication orders", http.StatusInternalServerError)

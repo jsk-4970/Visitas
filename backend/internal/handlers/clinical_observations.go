@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
 	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
@@ -29,6 +30,13 @@ func (h *ClinicalObservationHandler) CreateClinicalObservation(w http.ResponseWr
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.ClinicalObservationCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -36,11 +44,15 @@ func (h *ClinicalObservationHandler) CreateClinicalObservation(w http.ResponseWr
 		return
 	}
 
-	observation, err := h.clinicalObservationService.CreateClinicalObservation(ctx, patientID, &req)
+	observation, err := h.clinicalObservationService.CreateClinicalObservation(ctx, patientID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to create clinical observation", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to create observations for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -58,9 +70,20 @@ func (h *ClinicalObservationHandler) GetClinicalObservation(w http.ResponseWrite
 	patientID := chi.URLParam(r, "patient_id")
 	observationID := chi.URLParam(r, "id")
 
-	observation, err := h.clinicalObservationService.GetClinicalObservation(ctx, patientID, observationID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	observation, err := h.clinicalObservationService.GetClinicalObservation(ctx, patientID, observationID, userID)
 	if err != nil {
 		logger.Error("Failed to get clinical observation", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's observations" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Clinical observation not found", http.StatusNotFound)
 		return
 	}
@@ -73,6 +96,13 @@ func (h *ClinicalObservationHandler) GetClinicalObservation(w http.ResponseWrite
 func (h *ClinicalObservationHandler) GetClinicalObservations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse query parameters
 	filter := &models.ClinicalObservationFilter{
@@ -139,9 +169,13 @@ func (h *ClinicalObservationHandler) GetClinicalObservations(w http.ResponseWrit
 		filter.Offset = offset
 	}
 
-	observations, err := h.clinicalObservationService.ListClinicalObservations(ctx, filter)
+	observations, err := h.clinicalObservationService.ListClinicalObservations(ctx, filter, userID)
 	if err != nil {
 		logger.Error("Failed to list clinical observations", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's observations" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Failed to retrieve clinical observations", http.StatusInternalServerError)
 		return
 	}
@@ -156,6 +190,13 @@ func (h *ClinicalObservationHandler) UpdateClinicalObservation(w http.ResponseWr
 	patientID := chi.URLParam(r, "patient_id")
 	observationID := chi.URLParam(r, "id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.ClinicalObservationUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -163,11 +204,15 @@ func (h *ClinicalObservationHandler) UpdateClinicalObservation(w http.ResponseWr
 		return
 	}
 
-	observation, err := h.clinicalObservationService.UpdateClinicalObservation(ctx, patientID, observationID, &req)
+	observation, err := h.clinicalObservationService.UpdateClinicalObservation(ctx, patientID, observationID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to update clinical observation", err)
 		if err.Error() == "clinical observation not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to update observations for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -184,9 +229,20 @@ func (h *ClinicalObservationHandler) DeleteClinicalObservation(w http.ResponseWr
 	patientID := chi.URLParam(r, "patient_id")
 	observationID := chi.URLParam(r, "id")
 
-	err := h.clinicalObservationService.DeleteClinicalObservation(ctx, patientID, observationID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.clinicalObservationService.DeleteClinicalObservation(ctx, patientID, observationID, userID)
 	if err != nil {
 		logger.Error("Failed to delete clinical observation", err)
+		if err.Error() == "access denied: you do not have permission to delete observations for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -200,11 +256,22 @@ func (h *ClinicalObservationHandler) GetLatestObservation(w http.ResponseWriter,
 	patientID := chi.URLParam(r, "patient_id")
 	category := chi.URLParam(r, "category")
 
-	observation, err := h.clinicalObservationService.GetLatestObservationByCategory(ctx, patientID, category)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	observation, err := h.clinicalObservationService.GetLatestObservationByCategory(ctx, patientID, category, userID)
 	if err != nil {
 		logger.Error("Failed to get latest observation", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's observations" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -220,6 +287,13 @@ func (h *ClinicalObservationHandler) GetTimeSeriesData(w http.ResponseWriter, r 
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 	category := chi.URLParam(r, "category")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse from and to dates
 	fromStr := r.URL.Query().Get("from")
@@ -242,11 +316,15 @@ func (h *ClinicalObservationHandler) GetTimeSeriesData(w http.ResponseWriter, r 
 		return
 	}
 
-	observations, err := h.clinicalObservationService.GetTimeSeriesData(ctx, patientID, category, from, to)
+	observations, err := h.clinicalObservationService.GetTimeSeriesData(ctx, patientID, category, from, to, userID)
 	if err != nil {
 		logger.Error("Failed to get time series data", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's observations" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)

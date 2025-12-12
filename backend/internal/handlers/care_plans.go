@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
 	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
@@ -29,6 +30,13 @@ func (h *CarePlanHandler) CreateCarePlan(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.CarePlanCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -36,11 +44,15 @@ func (h *CarePlanHandler) CreateCarePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	carePlan, err := h.carePlanService.CreateCarePlan(ctx, patientID, &req)
+	carePlan, err := h.carePlanService.CreateCarePlan(ctx, patientID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to create care plan", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to create care plans for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -58,9 +70,20 @@ func (h *CarePlanHandler) GetCarePlan(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "patient_id")
 	planID := chi.URLParam(r, "id")
 
-	carePlan, err := h.carePlanService.GetCarePlan(ctx, patientID, planID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	carePlan, err := h.carePlanService.GetCarePlan(ctx, patientID, planID, userID)
 	if err != nil {
 		logger.Error("Failed to get care plan", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's care plans" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Care plan not found", http.StatusNotFound)
 		return
 	}
@@ -73,6 +96,13 @@ func (h *CarePlanHandler) GetCarePlan(w http.ResponseWriter, r *http.Request) {
 func (h *CarePlanHandler) GetCarePlans(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse query parameters
 	filter := &models.CarePlanFilter{
@@ -134,9 +164,13 @@ func (h *CarePlanHandler) GetCarePlans(w http.ResponseWriter, r *http.Request) {
 		filter.Offset = offset
 	}
 
-	carePlans, err := h.carePlanService.ListCarePlans(ctx, filter)
+	carePlans, err := h.carePlanService.ListCarePlans(ctx, filter, userID)
 	if err != nil {
 		logger.Error("Failed to list care plans", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's care plans" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Failed to retrieve care plans", http.StatusInternalServerError)
 		return
 	}
@@ -151,6 +185,13 @@ func (h *CarePlanHandler) UpdateCarePlan(w http.ResponseWriter, r *http.Request)
 	patientID := chi.URLParam(r, "patient_id")
 	planID := chi.URLParam(r, "id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.CarePlanUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -158,11 +199,15 @@ func (h *CarePlanHandler) UpdateCarePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	carePlan, err := h.carePlanService.UpdateCarePlan(ctx, patientID, planID, &req)
+	carePlan, err := h.carePlanService.UpdateCarePlan(ctx, patientID, planID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to update care plan", err)
 		if err.Error() == "care plan not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to update care plans for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -179,9 +224,20 @@ func (h *CarePlanHandler) DeleteCarePlan(w http.ResponseWriter, r *http.Request)
 	patientID := chi.URLParam(r, "patient_id")
 	planID := chi.URLParam(r, "id")
 
-	err := h.carePlanService.DeleteCarePlan(ctx, patientID, planID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.carePlanService.DeleteCarePlan(ctx, patientID, planID, userID)
 	if err != nil {
 		logger.Error("Failed to delete care plan", err)
+		if err.Error() == "access denied: you do not have permission to delete care plans for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -194,11 +250,22 @@ func (h *CarePlanHandler) GetActiveCarePlans(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
-	carePlans, err := h.carePlanService.GetActiveCarePlans(ctx, patientID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	carePlans, err := h.carePlanService.GetActiveCarePlans(ctx, patientID, userID)
 	if err != nil {
 		logger.Error("Failed to get active care plans", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's care plans" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, "Failed to retrieve active care plans", http.StatusInternalServerError)

@@ -61,6 +61,8 @@ backend/coverage.out
 backend/coverage.html
 backend/config/firebase-service-account.json
 backend/config/*.json
+backend/api
+backend/cmd/api/api
 
 # Firebase & GCP
 *-firebase-adminsdk-*.json

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/visitas/backend/internal/middleware"
 	"github.com/visitas/backend/internal/models"
 	"github.com/visitas/backend/internal/services"
 	"github.com/visitas/backend/pkg/logger"
@@ -29,6 +30,13 @@ func (h *VisitScheduleHandler) CreateVisitSchedule(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.VisitScheduleCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -36,11 +44,15 @@ func (h *VisitScheduleHandler) CreateVisitSchedule(w http.ResponseWriter, r *htt
 		return
 	}
 
-	schedule, err := h.visitScheduleService.CreateVisitSchedule(ctx, patientID, &req)
+	schedule, err := h.visitScheduleService.CreateVisitSchedule(ctx, patientID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to create visit schedule", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to create schedules for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -58,9 +70,20 @@ func (h *VisitScheduleHandler) GetVisitSchedule(w http.ResponseWriter, r *http.R
 	patientID := chi.URLParam(r, "patient_id")
 	scheduleID := chi.URLParam(r, "id")
 
-	schedule, err := h.visitScheduleService.GetVisitSchedule(ctx, patientID, scheduleID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	schedule, err := h.visitScheduleService.GetVisitSchedule(ctx, patientID, scheduleID, userID)
 	if err != nil {
 		logger.Error("Failed to get visit schedule", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's schedules" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Visit schedule not found", http.StatusNotFound)
 		return
 	}
@@ -73,6 +96,13 @@ func (h *VisitScheduleHandler) GetVisitSchedule(w http.ResponseWriter, r *http.R
 func (h *VisitScheduleHandler) GetVisitSchedules(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse query parameters
 	filter := &models.VisitScheduleFilter{
@@ -149,9 +179,13 @@ func (h *VisitScheduleHandler) GetVisitSchedules(w http.ResponseWriter, r *http.
 		filter.Offset = offset
 	}
 
-	schedules, err := h.visitScheduleService.ListVisitSchedules(ctx, filter)
+	schedules, err := h.visitScheduleService.ListVisitSchedules(ctx, filter, userID)
 	if err != nil {
 		logger.Error("Failed to list visit schedules", err)
+		if err.Error() == "access denied: you do not have permission to view this patient's schedules" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Failed to retrieve visit schedules", http.StatusInternalServerError)
 		return
 	}
@@ -166,6 +200,13 @@ func (h *VisitScheduleHandler) UpdateVisitSchedule(w http.ResponseWriter, r *htt
 	patientID := chi.URLParam(r, "patient_id")
 	scheduleID := chi.URLParam(r, "id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.VisitScheduleUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Error("Failed to decode request body", err)
@@ -173,11 +214,15 @@ func (h *VisitScheduleHandler) UpdateVisitSchedule(w http.ResponseWriter, r *htt
 		return
 	}
 
-	schedule, err := h.visitScheduleService.UpdateVisitSchedule(ctx, patientID, scheduleID, &req)
+	schedule, err := h.visitScheduleService.UpdateVisitSchedule(ctx, patientID, scheduleID, &req, userID)
 	if err != nil {
 		logger.Error("Failed to update visit schedule", err)
 		if err.Error() == "visit schedule not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to update schedules for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -194,9 +239,20 @@ func (h *VisitScheduleHandler) DeleteVisitSchedule(w http.ResponseWriter, r *htt
 	patientID := chi.URLParam(r, "patient_id")
 	scheduleID := chi.URLParam(r, "id")
 
-	err := h.visitScheduleService.DeleteVisitSchedule(ctx, patientID, scheduleID)
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := h.visitScheduleService.DeleteVisitSchedule(ctx, patientID, scheduleID, userID)
 	if err != nil {
 		logger.Error("Failed to delete visit schedule", err)
+		if err.Error() == "access denied: you do not have permission to delete schedules for this patient" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -209,6 +265,13 @@ func (h *VisitScheduleHandler) GetUpcomingSchedules(w http.ResponseWriter, r *ht
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Parse days parameter (default 7)
 	days := 7
 	if daysStr := r.URL.Query().Get("days"); daysStr != "" {
@@ -220,11 +283,15 @@ func (h *VisitScheduleHandler) GetUpcomingSchedules(w http.ResponseWriter, r *ht
 		days = val
 	}
 
-	schedules, err := h.visitScheduleService.GetUpcomingSchedules(ctx, patientID, days)
+	schedules, err := h.visitScheduleService.GetUpcomingSchedules(ctx, patientID, days, userID)
 	if err != nil {
 		logger.Error("Failed to get upcoming schedules", err)
 		if err.Error() == "patient not found" {
 			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err.Error() == "access denied: you do not have permission to view this patient's schedules" {
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		http.Error(w, "Failed to retrieve upcoming schedules", http.StatusInternalServerError)
@@ -241,6 +308,13 @@ func (h *VisitScheduleHandler) AssignStaff(w http.ResponseWriter, r *http.Reques
 	patientID := chi.URLParam(r, "patient_id")
 	scheduleID := chi.URLParam(r, "id")
 
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req struct {
 		StaffID string `json:"staff_id"`
 	}
@@ -255,9 +329,13 @@ func (h *VisitScheduleHandler) AssignStaff(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	schedule, err := h.visitScheduleService.AssignStaff(ctx, patientID, scheduleID, req.StaffID)
+	schedule, err := h.visitScheduleService.AssignStaff(ctx, patientID, scheduleID, req.StaffID, userID)
 	if err != nil {
 		logger.Error("Failed to assign staff", err)
+		if err.Error() == "access denied: you do not have permission to assign staff for this patient's schedules" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -271,6 +349,13 @@ func (h *VisitScheduleHandler) UpdateStatus(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	patientID := chi.URLParam(r, "patient_id")
 	scheduleID := chi.URLParam(r, "id")
+
+	// Get user ID from context
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		Status string `json:"status"`
@@ -286,9 +371,13 @@ func (h *VisitScheduleHandler) UpdateStatus(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	schedule, err := h.visitScheduleService.UpdateStatus(ctx, patientID, scheduleID, req.Status)
+	schedule, err := h.visitScheduleService.UpdateStatus(ctx, patientID, scheduleID, req.Status, userID)
 	if err != nil {
 		logger.Error("Failed to update status", err)
+		if err.Error() == "access denied: you do not have permission to update status for this patient's schedules" {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
