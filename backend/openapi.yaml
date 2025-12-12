@@ -1,0 +1,949 @@
+openapi: 3.0.3
+info:
+  title: Visitas API - Home Healthcare Visit Management Platform
+  description: |
+    Visitas is an AI-driven cloud platform for Japanese home healthcare (訪問診療) management.
+
+    This API provides:
+    - Patient management with FHIR-aligned data structures
+    - Visit scheduling with Google Maps Route Optimization integration
+    - Clinical observations (vital signs, ADL assessments)
+    - Care planning and medication orders
+    - Advance Care Planning (ACP) records
+    - Secure authentication via Firebase
+    - 3省2ガイドライン compliant audit logging
+  version: 1.0.0
+  contact:
+    name: Visitas API Support
+servers:
+  - url: https://api.visitas.example.com/api/v1
+    description: Production server
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+
+security:
+  - FirebaseAuth: []
+
+components:
+  securitySchemes:
+    FirebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase Authentication JWT token
+
+  schemas:
+    Patient:
+      type: object
+      required:
+        - patient_id
+        - name_history
+        - birth_date
+        - gender
+      properties:
+        patient_id:
+          type: string
+          format: uuid
+          description: Unique patient identifier
+        name_history:
+          type: object
+          description: JSONB field containing name change history
+        birth_date:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        phone_number:
+          type: string
+        email:
+          type: string
+          format: email
+        emergency_contact:
+          type: object
+          description: JSONB field for emergency contact information
+        address_history:
+          type: object
+          description: JSONB field containing address change history
+        care_level:
+          type: string
+          description: Japanese long-term care insurance level (要介護度)
+
+    VisitSchedule:
+      type: object
+      required:
+        - schedule_id
+        - patient_id
+        - visit_date
+        - visit_type
+        - estimated_duration_minutes
+        - status
+        - priority_score
+      properties:
+        schedule_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        visit_date:
+          type: string
+          format: date-time
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial_assessment, terminal_care]
+        time_window_start:
+          type: string
+          format: date-time
+        time_window_end:
+          type: string
+          format: date-time
+        estimated_duration_minutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+        assigned_staff_id:
+          type: string
+          format: uuid
+        assigned_vehicle_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, optimized, assigned, in_progress, completed, cancelled]
+        priority_score:
+          type: integer
+          minimum: 1
+          maximum: 10
+        constraints:
+          type: object
+          description: JSONB field for Google Maps API Shipment.VisitRequest
+        optimization_result:
+          type: object
+          description: JSONB field for route optimization API response
+        care_plan_ref:
+          type: string
+          format: uuid
+        activity_ref:
+          type: string
+          format: uuid
+
+    ClinicalObservation:
+      type: object
+      required:
+        - observation_id
+        - patient_id
+        - category
+        - code
+        - value
+        - effective_datetime
+      properties:
+        observation_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
+        code:
+          type: object
+          description: JSONB field for LOINC/SNOMED-CT coding
+        value:
+          type: object
+          description: JSONB field for measured value (QuantityValue, CodedValue, BloodPressureValue)
+        effective_datetime:
+          type: string
+          format: date-time
+        performer_id:
+          type: string
+          format: uuid
+        interpretation:
+          type: string
+          enum: [normal, high, low, critical]
+        note:
+          type: string
+
+    CarePlan:
+      type: object
+      required:
+        - plan_id
+        - patient_id
+        - status
+        - intent
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, active, on-hold, revoked, completed]
+        intent:
+          type: string
+          enum: [proposal, plan, order]
+        title:
+          type: string
+        description:
+          type: string
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        goals:
+          type: object
+          description: JSONB field for SMART-formatted goals
+        activities:
+          type: object
+          description: JSONB field for planned activities
+        author_id:
+          type: string
+          format: uuid
+
+    MedicationOrder:
+      type: object
+      required:
+        - order_id
+        - patient_id
+        - status
+        - intent
+        - medication
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, on-hold, cancelled, completed, entered-in-error]
+        intent:
+          type: string
+          enum: [order, plan, proposal]
+        medication:
+          type: object
+          description: JSONB field containing YJ code and medication details
+        dosage_instruction:
+          type: object
+          description: JSONB field for dosing instructions
+        authored_on:
+          type: string
+          format: date-time
+        prescriber_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        note:
+          type: string
+
+    ACPRecord:
+      type: object
+      required:
+        - acp_id
+        - patient_id
+        - version
+        - status
+        - decision_maker
+      properties:
+        acp_id:
+          type: string
+          format: uuid
+        patient_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Version number for tracking ACP decision changes
+        status:
+          type: string
+          enum: [draft, active, superseded]
+        decision_maker:
+          type: string
+          enum: [patient, proxy, guardian]
+        proxy_person_name:
+          type: string
+        proxy_relationship:
+          type: string
+        directives:
+          type: object
+          description: JSONB field for end-of-life directives (DNAR/POLST)
+        discussion_log:
+          type: object
+          description: JSONB field tracking ACP discussions
+        legal_documents:
+          type: object
+          description: JSONB field for legal document references
+        data_sensitivity:
+          type: string
+          enum: [normal, confidential, highly_confidential]
+          default: highly_confidential
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the API
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+
+  /patients:
+    get:
+      summary: List assigned patients
+      description: Returns all patients assigned to the authenticated staff member
+      tags:
+        - Patients
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of patients
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  patients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Patient'
+                  total:
+                    type: integer
+
+    post:
+      summary: Create a new patient
+      tags:
+        - Patients
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+      responses:
+        '201':
+          description: Patient created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+
+  /patients/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get patient by ID
+      tags:
+        - Patients
+      responses:
+        '200':
+          description: Patient details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '404':
+          description: Patient not found
+
+    put:
+      summary: Update patient
+      tags:
+        - Patients
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+      responses:
+        '200':
+          description: Patient updated successfully
+
+    delete:
+      summary: Delete patient (soft delete)
+      tags:
+        - Patients
+      responses:
+        '204':
+          description: Patient deleted successfully
+
+  /patients/{patient_id}/schedules:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: List visit schedules
+      tags:
+        - Visit Schedules
+      parameters:
+        - name: visit_date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: visit_date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: visit_type
+          in: query
+          schema:
+            type: string
+            enum: [regular, emergency, initial_assessment, terminal_care]
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of visit schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisitSchedule'
+
+    post:
+      summary: Create visit schedule
+      tags:
+        - Visit Schedules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitSchedule'
+      responses:
+        '201':
+          description: Visit schedule created
+
+  /patients/{patient_id}/schedules/upcoming:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get upcoming schedules
+      description: Retrieves upcoming visit schedules within the specified number of days
+      tags:
+        - Visit Schedules
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+      responses:
+        '200':
+          description: List of upcoming schedules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisitSchedule'
+
+  /patients/{patient_id}/schedules/{id}:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get visit schedule by ID
+      tags:
+        - Visit Schedules
+      responses:
+        '200':
+          description: Visit schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitSchedule'
+
+    put:
+      summary: Update visit schedule
+      tags:
+        - Visit Schedules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitSchedule'
+      responses:
+        '200':
+          description: Visit schedule updated
+
+    delete:
+      summary: Delete visit schedule
+      tags:
+        - Visit Schedules
+      responses:
+        '204':
+          description: Visit schedule deleted
+
+  /patients/{patient_id}/schedules/{id}/assign-staff:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Assign staff to visit schedule
+      tags:
+        - Visit Schedules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - staff_id
+              properties:
+                staff_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Staff assigned successfully
+
+  /patients/{patient_id}/schedules/{id}/status:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Update schedule status
+      tags:
+        - Visit Schedules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [draft, optimized, assigned, in_progress, completed, cancelled]
+      responses:
+        '200':
+          description: Status updated successfully
+
+  /patients/{patient_id}/observations:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: List clinical observations
+      tags:
+        - Clinical Observations
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of clinical observations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClinicalObservation'
+
+    post:
+      summary: Create clinical observation
+      tags:
+        - Clinical Observations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicalObservation'
+      responses:
+        '201':
+          description: Clinical observation created
+
+  /patients/{patient_id}/observations/latest/{category}:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: category
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
+
+    get:
+      summary: Get latest observation by category
+      tags:
+        - Clinical Observations
+      responses:
+        '200':
+          description: Latest observation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicalObservation'
+
+  /patients/{patient_id}/observations/timeseries/{category}:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: category
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get time series data for observations
+      description: Retrieves historical observation data for trend analysis
+      tags:
+        - Clinical Observations
+      parameters:
+        - name: from_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Time series observation data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClinicalObservation'
+
+  /patients/{patient_id}/care-plans:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: List care plans
+      tags:
+        - Care Plans
+      responses:
+        '200':
+          description: List of care plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CarePlan'
+
+    post:
+      summary: Create care plan
+      tags:
+        - Care Plans
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarePlan'
+      responses:
+        '201':
+          description: Care plan created
+
+  /patients/{patient_id}/care-plans/active:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get active care plans
+      tags:
+        - Care Plans
+      responses:
+        '200':
+          description: List of active care plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CarePlan'
+
+  /patients/{patient_id}/medication-orders:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: List medication orders
+      tags:
+        - Medication Orders
+      responses:
+        '200':
+          description: List of medication orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicationOrder'
+
+    post:
+      summary: Create medication order
+      tags:
+        - Medication Orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicationOrder'
+      responses:
+        '201':
+          description: Medication order created
+
+  /patients/{patient_id}/medication-orders/active:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get active medication orders
+      tags:
+        - Medication Orders
+      responses:
+        '200':
+          description: List of active medication orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicationOrder'
+
+  /patients/{patient_id}/acp-records:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: List ACP records
+      tags:
+        - ACP Records
+      responses:
+        '200':
+          description: List of ACP records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ACPRecord'
+
+    post:
+      summary: Create ACP record
+      tags:
+        - ACP Records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ACPRecord'
+      responses:
+        '201':
+          description: ACP record created
+
+  /patients/{patient_id}/acp-records/latest:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get latest active ACP record
+      tags:
+        - ACP Records
+      responses:
+        '200':
+          description: Latest active ACP record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ACPRecord'
+
+  /patients/{patient_id}/acp-records/history:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get complete ACP history
+      description: Retrieves all versions of ACP records for audit trail
+      tags:
+        - ACP Records
+      responses:
+        '200':
+          description: Complete ACP history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ACPRecord'
+
+tags:
+  - name: Patients
+    description: Patient management operations
+  - name: Visit Schedules
+    description: Visit scheduling with route optimization
+  - name: Clinical Observations
+    description: Vital signs, ADL assessments, and clinical measurements
+  - name: Care Plans
+    description: Care planning and goal management
+  - name: Medication Orders
+    description: Prescription and medication management
+  - name: ACP Records
+    description: Advance Care Planning records (DNAR/POLST)

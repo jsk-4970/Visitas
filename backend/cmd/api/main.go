@@ -98,6 +98,11 @@ func main() {
 	coverageRepo := repository.NewCoverageRepository(spannerRepo)
 	medicalConditionRepo := repository.NewMedicalConditionRepository(spannerRepo)
 	allergyIntoleranceRepo := repository.NewAllergyIntoleranceRepository(spannerRepo)
+	visitScheduleRepo := repository.NewVisitScheduleRepository(spannerRepo)
+	clinicalObservationRepo := repository.NewClinicalObservationRepository(spannerRepo)
+	carePlanRepo := repository.NewCarePlanRepository(spannerRepo)
+	medicationOrderRepo := repository.NewMedicationOrderRepository(spannerRepo)
+	acpRecordRepo := repository.NewACPRecordRepository(spannerRepo)
 
 	// Initialize services
 	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
@@ -105,6 +110,11 @@ func main() {
 	allergyIntoleranceService := services.NewAllergyIntoleranceService(allergyIntoleranceRepo, patientRepo)
 	socialProfileService := services.NewSocialProfileService(socialProfileRepo, patientRepo)
 	coverageService := services.NewCoverageService(coverageRepo, patientRepo)
+	visitScheduleService := services.NewVisitScheduleService(visitScheduleRepo, patientRepo)
+	clinicalObservationService := services.NewClinicalObservationService(clinicalObservationRepo, patientRepo)
+	carePlanService := services.NewCarePlanService(carePlanRepo, patientRepo)
+	medicationOrderService := services.NewMedicationOrderService(medicationOrderRepo, patientRepo)
+	acpRecordService := services.NewACPRecordService(acpRecordRepo, patientRepo)
 
 	// Initialize middleware
 	auditMiddleware := middleware.NewAuditLoggerMiddleware(auditRepo)
@@ -116,6 +126,11 @@ func main() {
 	coverageHandler := handlers.NewCoverageHandler(coverageService)
 	medicalConditionHandler := handlers.NewMedicalConditionHandler(medicalConditionService)
 	allergyIntoleranceHandler := handlers.NewAllergyIntoleranceHandler(allergyIntoleranceService)
+	visitScheduleHandler := handlers.NewVisitScheduleHandler(visitScheduleService)
+	clinicalObservationHandler := handlers.NewClinicalObservationHandler(clinicalObservationService)
+	carePlanHandler := handlers.NewCarePlanHandler(carePlanService)
+	medicationOrderHandler := handlers.NewMedicationOrderHandler(medicationOrderService)
+	acpRecordHandler := handlers.NewACPRecordHandler(acpRecordService)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -208,6 +223,60 @@ func main() {
 			r.Get("/{id}", allergyIntoleranceHandler.GetAllergyIntolerance)    // Get allergy intolerance by ID
 			r.Put("/{id}", allergyIntoleranceHandler.UpdateAllergyIntolerance) // Update allergy intolerance
 			r.Delete("/{id}", allergyIntoleranceHandler.DeleteAllergyIntolerance) // Delete allergy intolerance
+		})
+
+		// Visit schedule routes (protected)
+		r.Route("/patients/{patient_id}/schedules", func(r chi.Router) {
+			r.Get("/", visitScheduleHandler.GetVisitSchedules)       // List visit schedules
+			r.Post("/", visitScheduleHandler.CreateVisitSchedule)    // Create visit schedule
+			r.Get("/upcoming", visitScheduleHandler.GetUpcomingSchedules) // Get upcoming schedules
+			r.Get("/{id}", visitScheduleHandler.GetVisitSchedule)    // Get visit schedule by ID
+			r.Put("/{id}", visitScheduleHandler.UpdateVisitSchedule) // Update visit schedule
+			r.Delete("/{id}", visitScheduleHandler.DeleteVisitSchedule) // Delete visit schedule
+			r.Post("/{id}/assign-staff", visitScheduleHandler.AssignStaff) // Assign staff to schedule
+			r.Post("/{id}/status", visitScheduleHandler.UpdateStatus) // Update schedule status
+		})
+
+		// Clinical observation routes (protected)
+		r.Route("/patients/{patient_id}/observations", func(r chi.Router) {
+			r.Get("/", clinicalObservationHandler.GetClinicalObservations)       // List clinical observations
+			r.Post("/", clinicalObservationHandler.CreateClinicalObservation)    // Create clinical observation
+			r.Get("/latest/{category}", clinicalObservationHandler.GetLatestObservation) // Get latest observation by category
+			r.Get("/timeseries/{category}", clinicalObservationHandler.GetTimeSeriesData) // Get time series data
+			r.Get("/{id}", clinicalObservationHandler.GetClinicalObservation)    // Get clinical observation by ID
+			r.Put("/{id}", clinicalObservationHandler.UpdateClinicalObservation) // Update clinical observation
+			r.Delete("/{id}", clinicalObservationHandler.DeleteClinicalObservation) // Delete clinical observation
+		})
+
+		// Care plan routes (protected)
+		r.Route("/patients/{patient_id}/care-plans", func(r chi.Router) {
+			r.Get("/", carePlanHandler.GetCarePlans)       // List care plans
+			r.Post("/", carePlanHandler.CreateCarePlan)    // Create care plan
+			r.Get("/active", carePlanHandler.GetActiveCarePlans) // Get active care plans
+			r.Get("/{id}", carePlanHandler.GetCarePlan)    // Get care plan by ID
+			r.Put("/{id}", carePlanHandler.UpdateCarePlan) // Update care plan
+			r.Delete("/{id}", carePlanHandler.DeleteCarePlan) // Delete care plan
+		})
+
+		// Medication order routes (protected)
+		r.Route("/patients/{patient_id}/medication-orders", func(r chi.Router) {
+			r.Get("/", medicationOrderHandler.GetMedicationOrders)       // List medication orders
+			r.Post("/", medicationOrderHandler.CreateMedicationOrder)    // Create medication order
+			r.Get("/active", medicationOrderHandler.GetActiveOrders)     // Get active medication orders
+			r.Get("/{id}", medicationOrderHandler.GetMedicationOrder)    // Get medication order by ID
+			r.Put("/{id}", medicationOrderHandler.UpdateMedicationOrder) // Update medication order
+			r.Delete("/{id}", medicationOrderHandler.DeleteMedicationOrder) // Delete medication order
+		})
+
+		// ACP record routes (protected)
+		r.Route("/patients/{patient_id}/acp-records", func(r chi.Router) {
+			r.Get("/", acpRecordHandler.GetACPRecords)         // List ACP records
+			r.Post("/", acpRecordHandler.CreateACPRecord)      // Create ACP record
+			r.Get("/latest", acpRecordHandler.GetLatestACP)    // Get latest active ACP
+			r.Get("/history", acpRecordHandler.GetACPHistory)  // Get complete ACP history
+			r.Get("/{id}", acpRecordHandler.GetACPRecord)      // Get ACP record by ID
+			r.Put("/{id}", acpRecordHandler.UpdateACPRecord)   // Update ACP record
+			r.Delete("/{id}", acpRecordHandler.DeleteACPRecord) // Delete ACP record
 		})
 	})
 
