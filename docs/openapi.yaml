@@ -37,26 +37,6 @@ tags:
     description: 患者マスターデータ管理
   - name: Patient Identifiers
     description: 患者識別子管理 (マイナンバー、保険証番号等)
-  - name: Social Profiles
-    description: 社会的背景・ナラティブ情報
-  - name: Coverages
-    description: 保険情報管理
-  - name: Medical Conditions
-    description: 病名・既往歴管理
-  - name: Allergies
-    description: アレルギー・副作用歴管理
-  - name: Observations
-    description: バイタルサイン・ADL評価
-  - name: Care Plans
-    description: ケア計画管理
-  - name: ACP
-    description: Advance Care Planning (人生会議)
-  - name: Medications
-    description: 処方オーダー管理
-  - name: Visit Schedules
-    description: 訪問スケジュール管理
-  - name: Route Optimization
-    description: ルート最適化
   - name: Health
     description: ヘルスチェック
 
@@ -227,139 +207,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /patients/{patientId}/social-profiles:
-    parameters:
-      - $ref: '#/components/parameters/PatientId'
-
-    get:
-      tags:
-        - Social Profiles
-      summary: 社会的背景取得
-      description: |
-        患者の社会的背景情報(Subjective data)を取得します。
-        - 生活状況 (独居、家族同居等)
-        - キーパーソン情報
-        - 介護者負担評価
-        - 宗教的・文化的配慮事項
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SocialProfile'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    post:
-      tags:
-        - Social Profiles
-      summary: 社会的背景登録
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SocialProfileCreateRequest'
-      responses:
-        '201':
-          description: 作成成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SocialProfile'
-
-  /patients/{patientId}/coverages:
-    parameters:
-      - $ref: '#/components/parameters/PatientId'
-
-    get:
-      tags:
-        - Coverages
-      summary: 保険情報一覧取得
-      description: |
-        患者の保険情報を取得します。
-        - 医療保険
-        - 介護保険
-        - 公費負担
-      parameters:
-        - name: type
-          in: query
-          schema:
-            type: string
-            enum: [medical, long_term_care, public_expense]
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [active, cancelled, draft]
-            default: active
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Coverage'
-
-    post:
-      tags:
-        - Coverages
-      summary: 保険情報登録
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CoverageCreateRequest'
-      responses:
-        '201':
-          description: 作成成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Coverage'
-
-  /patients/{patientId}/observations:
-    parameters:
-      - $ref: '#/components/parameters/PatientId'
-
-    get:
-      tags:
-        - Observations
-      summary: バイタルサイン・評価一覧取得
-      parameters:
-        - name: category
-          in: query
-          schema:
-            type: string
-            enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
-        - name: from
-          in: query
-          schema:
-            type: string
-            format: date-time
-        - name: to
-          in: query
-          schema:
-            type: string
-            format: date-time
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Observation'
-
 components:
   securitySchemes:
     BearerAuth:
@@ -383,7 +230,7 @@ components:
       type: object
       required:
         - patient_id
-        - name
+        - name_history
         - birth_date
         - gender
       properties:
@@ -391,8 +238,31 @@ components:
           type: string
           format: uuid
           description: 患者ID
-        name:
-          $ref: '#/components/schemas/HumanName'
+        name_history:
+          type: array
+          description: JSONB array of name records with validity periods
+          items:
+            $ref: '#/components/schemas/NameRecord'
+        current_family_name:
+          type: string
+          description: Generated column from name_history
+          readOnly: true
+        current_given_name:
+          type: string
+          description: Generated column from name_history
+          readOnly: true
+        primary_phone:
+          type: string
+          description: Generated column from contact_points
+          readOnly: true
+        current_prefecture:
+          type: string
+          description: Generated column from addresses
+          readOnly: true
+        current_city:
+          type: string
+          description: Generated column from addresses
+          readOnly: true
         birth_date:
           type: string
           format: date
@@ -410,69 +280,64 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Address'
-        photo_url:
+        consent_status:
           type: string
-          format: uri
-        active:
+          description: Consent management status
+        consent_obtained_at:
+          type: string
+          format: date-time
+        consent_withdrawn_at:
+          type: string
+          format: date-time
+        deleted:
           type: boolean
+          description: Soft delete flag
+        deleted_at:
+          type: string
+          format: date-time
+        deleted_reason:
+          type: string
         created_at:
           type: string
           format: date-time
+        created_by:
+          type: string
         updated_at:
           type: string
           format: date-time
+        updated_by:
+          type: string
 
-    HumanName:
+    NameRecord:
       type: object
       required:
         - family
         - given
-        - kana
+        - valid_from
       properties:
-        use:
-          type: string
-          enum: [official, maiden, nickname]
-          example: official
         family:
           type: string
           example: 山田
+          description: Family name (姓)
         given:
           type: string
           example: 太郎
+          description: Given name (名)
         kana:
           type: string
           example: ヤマダ タロウ
-        previous_names:
-          type: array
-          items:
-            $ref: '#/components/schemas/PreviousName'
-
-    PreviousName:
-      type: object
-      required:
-        - family
-        - given
-        - period
-      properties:
-        family:
+          description: Kana reading
+        valid_from:
           type: string
-        given:
+          format: date-time
+          description: Start of validity period
+        valid_to:
           type: string
-        period:
-          $ref: '#/components/schemas/Period'
+          format: date-time
+          description: End of validity period (null if current)
         change_reason:
           type: string
-          description: 婚姻, 離婚, etc.
-
-    Period:
-      type: object
-      properties:
-        start:
-          type: string
-          format: date
-        end:
-          type: string
-          format: date
+          description: Reason for name change (婚姻, 離婚, etc.)
 
     ContactPoint:
       type: object
@@ -549,153 +414,6 @@ components:
           minimum: -180
           maximum: 180
 
-    SocialProfile:
-      type: object
-      required:
-        - profile_id
-        - patient_id
-        - profile_version
-        - content
-      properties:
-        profile_id:
-          type: string
-          format: uuid
-        patient_id:
-          type: string
-          format: uuid
-        profile_version:
-          type: integer
-          description: Version number for tracking changes
-        content:
-          type: object
-          description: JSONB構造の社会的背景データ
-        lives_alone:
-          type: boolean
-          description: Generated column for fast queries
-        requires_caregiver_support:
-          type: boolean
-          description: Generated column for fast queries
-        valid_from:
-          type: string
-          format: date-time
-        valid_to:
-          type: string
-          format: date-time
-        assessed_by:
-          type: string
-          format: uuid
-        assessed_at:
-          type: string
-          format: date-time
-        assessment_notes:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        created_by:
-          type: string
-          format: uuid
-        updated_at:
-          type: string
-          format: date-time
-        updated_by:
-          type: string
-          format: uuid
-        deleted:
-          type: boolean
-        deleted_at:
-          type: string
-          format: date-time
-
-    Coverage:
-      type: object
-      required:
-        - coverage_id
-        - patient_id
-        - insurance_type
-        - status
-        - priority
-      properties:
-        coverage_id:
-          type: string
-          format: uuid
-        patient_id:
-          type: string
-          format: uuid
-        insurance_type:
-          type: string
-          enum: [medical, long_term_care, public_expense]
-        details:
-          type: object
-          description: 保険詳細(JSONB)
-        care_level_code:
-          type: string
-          description: For long_term_care (要支援1-2, 要介護1-5)
-        copay_rate:
-          type: integer
-          description: Percentage
-        valid_from:
-          type: string
-          format: date-time
-        valid_to:
-          type: string
-          format: date-time
-        status:
-          type: string
-          enum: [active, expired, suspended, terminated]
-        priority:
-          type: integer
-          minimum: 1
-          description: Lower number = higher priority
-        verification_status:
-          type: string
-        verified_at:
-          type: string
-          format: date-time
-        verified_by:
-          type: string
-          format: uuid
-        created_at:
-          type: string
-          format: date-time
-        created_by:
-          type: string
-          format: uuid
-        updated_at:
-          type: string
-          format: date-time
-        updated_by:
-          type: string
-          format: uuid
-        deleted:
-          type: boolean
-        deleted_at:
-          type: string
-          format: date-time
-
-    Observation:
-      type: object
-      properties:
-        observation_id:
-          type: string
-          format: uuid
-        patient_id:
-          type: string
-          format: uuid
-        category:
-          type: string
-          enum: [vital_signs, adl_assessment, cognitive_assessment, pain_scale]
-        code:
-          type: object
-        effective_datetime:
-          type: string
-          format: date-time
-        value:
-          type: object
-        interpretation:
-          type: string
-          enum: [normal, high, low, critical]
-
     PatientCreateRequest:
       type: object
       required:
@@ -704,7 +422,8 @@ components:
         - gender
       properties:
         name:
-          $ref: '#/components/schemas/HumanName'
+          $ref: '#/components/schemas/NameRecord'
+          description: Initial name record (will be stored in name_history)
         birth_date:
           type: string
           format: date
@@ -713,6 +432,7 @@ components:
           enum: [male, female, other, unknown]
         blood_type:
           type: string
+          enum: [A+, A-, B+, B-, O+, O-, AB+, AB-]
         contact_points:
           type: array
           items:
@@ -721,82 +441,51 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Address'
+        consent_status:
+          type: string
+        consent_obtained_at:
+          type: string
+          format: date-time
 
     PatientUpdateRequest:
       type: object
       properties:
-        name:
-          $ref: '#/components/schemas/HumanName'
+        birth_date:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        blood_type:
+          type: string
+          enum: [A+, A-, B+, B-, O+, O-, AB+, AB-]
+        add_name:
+          $ref: '#/components/schemas/NameRecord'
+          description: Add a new name to name_history
         contact_points:
           type: array
           items:
             $ref: '#/components/schemas/ContactPoint'
+          description: Replace entire contact_points array
+        add_contact_point:
+          $ref: '#/components/schemas/ContactPoint'
+          description: Add a single contact point
         addresses:
           type: array
           items:
             $ref: '#/components/schemas/Address'
-        photo_url:
+          description: Replace entire addresses array
+        add_address:
+          $ref: '#/components/schemas/Address'
+          description: Add a single address
+        consent_status:
           type: string
-          format: uri
-        active:
-          type: boolean
-
-    SocialProfileCreateRequest:
-      type: object
-      required:
-        - patient_id
-        - content
-        - valid_from
-      properties:
-        patient_id:
-          type: string
-          format: uuid
-        content:
-          type: object
-          description: 社会的背景の詳細(JSONB)
-        valid_from:
+        consent_obtained_at:
           type: string
           format: date-time
-        assessed_by:
-          type: string
-          format: uuid
-        assessed_at:
+        consent_withdrawn_at:
           type: string
           format: date-time
-        assessment_notes:
-          type: string
-
-    CoverageCreateRequest:
-      type: object
-      required:
-        - patient_id
-        - insurance_type
-        - valid_from
-        - details
-        - status
-        - priority
-      properties:
-        patient_id:
-          type: string
-          format: uuid
-        insurance_type:
-          type: string
-          enum: [medical, long_term_care, public_expense]
-        details:
-          type: object
-          description: 保険詳細(JSONB)
-        valid_from:
-          type: string
-          format: date-time
-        valid_to:
-          type: string
-          format: date-time
-        status:
-          type: string
-          enum: [active, expired, suspended, terminated]
-        priority:
-          type: integer
-          minimum: 1
 
     Pagination:
       type: object
