@@ -23,14 +23,16 @@ import (
 
 // TestConfig holds configuration for integration tests
 type TestConfig struct {
-	SpannerRepo            *repository.SpannerRepository
-	PatientRepo            *repository.PatientRepository
-	VisitScheduleRepo      *repository.VisitScheduleRepository
-	ClinicalObservationRepo *repository.ClinicalObservationRepository
-	CarePlanRepo           *repository.CarePlanRepository
-	MedicationOrderRepo    *repository.MedicationOrderRepository
-	ACPRecordRepo          *repository.ACPRecordRepository
-	AuditRepo              *repository.AuditRepository
+	SpannerRepo               *repository.SpannerRepository
+	PatientRepo               *repository.PatientRepository
+	VisitScheduleRepo         *repository.VisitScheduleRepository
+	ClinicalObservationRepo   *repository.ClinicalObservationRepository
+	CarePlanRepo              *repository.CarePlanRepository
+	MedicationOrderRepo       *repository.MedicationOrderRepository
+	ACPRecordRepo             *repository.ACPRecordRepository
+	MedicalRecordRepo         *repository.MedicalRecordRepository
+	MedicalRecordTemplateRepo *repository.MedicalRecordTemplateRepository
+	AuditRepo                 *repository.AuditRepository
 }
 
 // TestServer wraps the test HTTP server and related resources
@@ -64,6 +66,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 	carePlanRepo := repository.NewCarePlanRepository(spannerRepo)
 	medicationOrderRepo := repository.NewMedicationOrderRepository(spannerRepo)
 	acpRecordRepo := repository.NewACPRecordRepository(spannerRepo)
+	medicalRecordRepo := repository.NewMedicalRecordRepository(spannerRepo)
+	medicalRecordTemplateRepo := repository.NewMedicalRecordTemplateRepository(spannerRepo)
 
 	// Initialize services
 	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
@@ -72,6 +76,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 	carePlanService := services.NewCarePlanService(carePlanRepo, patientRepo)
 	medicationOrderService := services.NewMedicationOrderService(medicationOrderRepo, patientRepo)
 	acpRecordService := services.NewACPRecordService(acpRecordRepo, patientRepo)
+	medicalRecordService := services.NewMedicalRecordService(medicalRecordRepo, patientRepo, medicalRecordTemplateRepo)
+	medicalRecordTemplateService := services.NewMedicalRecordTemplateService(medicalRecordTemplateRepo)
 
 	// Initialize handlers
 	patientHandler := handlers.NewPatientHandler(patientService)
@@ -80,6 +86,8 @@ func SetupTestServer(t *testing.T) *TestServer {
 	carePlanHandler := handlers.NewCarePlanHandler(carePlanService)
 	medicationOrderHandler := handlers.NewMedicationOrderHandler(medicationOrderService)
 	acpRecordHandler := handlers.NewACPRecordHandler(acpRecordService)
+	medicalRecordHandler := handlers.NewMedicalRecordHandler(medicalRecordService)
+	medicalRecordTemplateHandler := handlers.NewMedicalRecordTemplateHandler(medicalRecordTemplateService)
 
 	// Initialize middleware
 	auditMiddleware := middleware.NewAuditLoggerMiddleware(auditRepo)
@@ -165,20 +173,52 @@ func SetupTestServer(t *testing.T) *TestServer {
 			r.Put("/{id}", acpRecordHandler.UpdateACPRecord)
 			r.Delete("/{id}", acpRecordHandler.DeleteACPRecord)
 		})
+
+		// Medical record routes
+		r.Route("/patients/{patient_id}/medical-records", func(r chi.Router) {
+			r.Get("/", medicalRecordHandler.ListMedicalRecords)
+			r.Post("/", medicalRecordHandler.CreateMedicalRecord)
+			r.Post("/from-template", medicalRecordHandler.CreateFromTemplate)
+			r.Get("/latest", medicalRecordHandler.GetLatestRecords)
+			r.Get("/{id}", medicalRecordHandler.GetMedicalRecord)
+			r.Put("/{id}", medicalRecordHandler.UpdateMedicalRecord)
+			r.Delete("/{id}", medicalRecordHandler.DeleteMedicalRecord)
+		})
+
+		// Medical record copy route
+		r.Route("/medical-records/{record_id}", func(r chi.Router) {
+			r.Post("/copy", medicalRecordHandler.CopyMedicalRecord)
+		})
+
+		// Medical record drafts route
+		r.Get("/medical-records/drafts", medicalRecordHandler.GetDraftRecords)
+
+		// Medical record template routes
+		r.Route("/medical-record-templates", func(r chi.Router) {
+			r.Get("/", medicalRecordTemplateHandler.ListTemplates)
+			r.Post("/", medicalRecordTemplateHandler.CreateTemplate)
+			r.Get("/system", medicalRecordTemplateHandler.GetSystemTemplates)
+			r.Get("/specialty/{specialty}", medicalRecordTemplateHandler.GetTemplatesBySpecialty)
+			r.Get("/{id}", medicalRecordTemplateHandler.GetTemplate)
+			r.Put("/{id}", medicalRecordTemplateHandler.UpdateTemplate)
+			r.Delete("/{id}", medicalRecordTemplateHandler.DeleteTemplate)
+		})
 	})
 
 	// Create test server
 	server := httptest.NewServer(r)
 
 	testConfig := &TestConfig{
-		SpannerRepo:            spannerRepo,
-		PatientRepo:            patientRepo,
-		VisitScheduleRepo:      visitScheduleRepo,
-		ClinicalObservationRepo: clinicalObservationRepo,
-		CarePlanRepo:           carePlanRepo,
-		MedicationOrderRepo:    medicationOrderRepo,
-		ACPRecordRepo:          acpRecordRepo,
-		AuditRepo:              auditRepo,
+		SpannerRepo:               spannerRepo,
+		PatientRepo:               patientRepo,
+		VisitScheduleRepo:         visitScheduleRepo,
+		ClinicalObservationRepo:   clinicalObservationRepo,
+		CarePlanRepo:              carePlanRepo,
+		MedicationOrderRepo:       medicationOrderRepo,
+		ACPRecordRepo:             acpRecordRepo,
+		MedicalRecordRepo:         medicalRecordRepo,
+		MedicalRecordTemplateRepo: medicalRecordTemplateRepo,
+		AuditRepo:                 auditRepo,
 	}
 
 	return &TestServer{

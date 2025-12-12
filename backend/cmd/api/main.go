@@ -103,6 +103,8 @@ func main() {
 	carePlanRepo := repository.NewCarePlanRepository(spannerRepo)
 	medicationOrderRepo := repository.NewMedicationOrderRepository(spannerRepo)
 	acpRecordRepo := repository.NewACPRecordRepository(spannerRepo)
+	medicalRecordRepo := repository.NewMedicalRecordRepository(spannerRepo)
+	medicalRecordTemplateRepo := repository.NewMedicalRecordTemplateRepository(spannerRepo)
 
 	// Initialize services
 	patientService := services.NewPatientService(patientRepo, assignmentRepo, auditRepo)
@@ -116,6 +118,8 @@ func main() {
 	carePlanService := services.NewCarePlanService(carePlanRepo, patientRepo)
 	medicationOrderService := services.NewMedicationOrderService(medicationOrderRepo, patientRepo)
 	acpRecordService := services.NewACPRecordService(acpRecordRepo, patientRepo)
+	medicalRecordTemplateService := services.NewMedicalRecordTemplateService(medicalRecordTemplateRepo)
+	medicalRecordService := services.NewMedicalRecordService(medicalRecordRepo, patientRepo, medicalRecordTemplateRepo)
 
 	// Initialize middleware
 	auditMiddleware := middleware.NewAuditLoggerMiddleware(auditRepo)
@@ -132,6 +136,8 @@ func main() {
 	carePlanHandler := handlers.NewCarePlanHandler(carePlanService)
 	medicationOrderHandler := handlers.NewMedicationOrderHandler(medicationOrderService)
 	acpRecordHandler := handlers.NewACPRecordHandler(acpRecordService)
+	medicalRecordHandler := handlers.NewMedicalRecordHandler(medicalRecordService)
+	medicalRecordTemplateHandler := handlers.NewMedicalRecordTemplateHandler(medicalRecordTemplateService)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -278,6 +284,36 @@ func main() {
 			r.Get("/{id}", acpRecordHandler.GetACPRecord)      // Get ACP record by ID
 			r.Put("/{id}", acpRecordHandler.UpdateACPRecord)   // Update ACP record
 			r.Delete("/{id}", acpRecordHandler.DeleteACPRecord) // Delete ACP record
+		})
+
+		// Medical record routes (protected) - Phase 1 Sprint 6: 基本カルテ機能
+		r.Route("/patients/{patient_id}/medical-records", func(r chi.Router) {
+			r.Get("/", medicalRecordHandler.ListMedicalRecords)           // List medical records
+			r.Post("/", medicalRecordHandler.CreateMedicalRecord)         // Create medical record
+			r.Get("/latest", medicalRecordHandler.GetLatestRecords)       // Get latest records
+			r.Post("/from-template", medicalRecordHandler.CreateFromTemplate) // Create from template
+			r.Get("/{id}", medicalRecordHandler.GetMedicalRecord)         // Get medical record by ID
+			r.Put("/{id}", medicalRecordHandler.UpdateMedicalRecord)      // Update medical record
+			r.Delete("/{id}", medicalRecordHandler.DeleteMedicalRecord)   // Delete medical record
+		})
+
+		// Medical record copy route (protected)
+		r.Route("/medical-records/{record_id}", func(r chi.Router) {
+			r.Post("/copy", medicalRecordHandler.CopyMedicalRecord) // Copy medical record
+		})
+
+		// Draft records route (protected)
+		r.Get("/medical-records/drafts", medicalRecordHandler.GetDraftRecords) // Get my draft records
+
+		// Medical record template routes (protected)
+		r.Route("/medical-record-templates", func(r chi.Router) {
+			r.Get("/", medicalRecordTemplateHandler.ListTemplates)              // List templates
+			r.Post("/", medicalRecordTemplateHandler.CreateTemplate)            // Create template
+			r.Get("/system", medicalRecordTemplateHandler.GetSystemTemplates)   // Get system templates
+			r.Get("/specialty/{specialty}", medicalRecordTemplateHandler.GetTemplatesBySpecialty) // Get by specialty
+			r.Get("/{id}", medicalRecordTemplateHandler.GetTemplate)            // Get template by ID
+			r.Put("/{id}", medicalRecordTemplateHandler.UpdateTemplate)         // Update template
+			r.Delete("/{id}", medicalRecordTemplateHandler.DeleteTemplate)      // Delete template
 		})
 	})
 
