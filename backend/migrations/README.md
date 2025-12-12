@@ -2,9 +2,12 @@
 
 このディレクトリには、Visitasプロジェクトのデータベーススキーマ定義が含まれています。
 
-## ✅ 実装済みマイグレーションファイル
+## ✅ 実装済みマイグレーションファイル (14/14 完成 🎉)
 
-### Phase 1 Core Tables (2025-12-12 完成)
+**最終更新**: 2025-12-12
+**ステータス**: 全テーブルマイグレーション完了
+
+### Phase 1 Core Tables (患者基本情報・医療記録)
 
 1. **`001_create_patients.sql`** - 患者マスターテーブル (Root Table)
    - JSONB: `name_history`, `contact_points`, `addresses`, `consent_details`
@@ -31,17 +34,54 @@
    - Generated Column: `max_severity` (最大重症度の自動計算)
    - クリティカリティ評価、薬剤アレルギー特化検索
 
-## 📋 計画中のマイグレーション (Phase 2-3)
+6. **`006_create_visit_schedules.sql`** - 訪問スケジュールテーブル
+   - JSONB: `visit_purpose`, `required_equipment`, `recurrence_rule`, `visit_address`
+   - Generated Columns: `duration_minutes`, `visit_prefecture`, `visit_city`
+   - ルート最適化連携、繰り返しスケジュール対応、位置情報管理
 
-6. `006_create_clinical_observations.sql` - バイタルサイン・ADL評価テーブル (未実装)
-7. `007_create_care_plans.sql` - ケア計画テーブル (未実装)
-8. `008_create_acp_records.sql` - ACP (Advance Care Planning) テーブル (未実装)
-9. `009_create_medication_orders.sql` - 処方オーダーテーブル (未実装)
-10. `010_create_visit_schedules.sql` - 訪問スケジュールテーブル (未実装)
-11. `011_create_logistics_locations.sql` - ロジスティクス拠点テーブル (未実装)
-12. `012_create_route_optimization_jobs.sql` - ルート最適化ジョブ履歴テーブル (未実装)
-13. `013_create_audit_logs.sql` - 監査ログテーブル (未実装)
-14. `014_create_staff_tables.sql` - スタッフ・車両管理テーブル (未実装)
+7. **`007_create_clinical_observations.sql`** - バイタルサイン・ADL評価テーブル (FHIR Observation準拠)
+   - JSONB: `value_structured`, `adl_details`
+   - Generated Columns: `systolic_bp`, `diastolic_bp`
+   - LOINC/SNOMED-CT コード管理、多様な観察値型対応 (quantity, string, boolean)
+
+8. **`008_create_medication_orders.sql`** - 処方オーダーテーブル (FHIR MedicationRequest準拠)
+   - JSONB: `dosage_instruction`, `dispense_request`, `check_warnings`
+   - Generated Columns: `dose_quantity`, `dose_unit`, `frequency`
+   - 薬価基準(YJ)コード、安全性チェック、リフィル処方対応
+
+9. **`009_create_care_plans.sql`** - ケア計画テーブル (FHIR CarePlan準拠)
+   - JSONB: `care_team`, `goals`, `activities`, `subject_condition_references`
+   - Generated Column: `plan_duration_days`
+   - 在宅医療・看護・介護計画の統合管理
+
+10. **`010_create_staff_tables.sql`** - スタッフ・車両管理テーブル (2テーブル)
+    - `staff_members`: 医療従事者マスター
+      - JSONB: `specialties`, `certifications`, `work_schedule`
+      - Generated Column: `full_name`
+      - リアルタイム位置情報、免許・資格期限管理
+    - `vehicles`: 訪問車両管理
+      - JSONB: `medical_equipment`
+      - GPS追跡、保険・車検期限管理
+
+11. **`011_create_acp_records.sql`** - ACP (Advance Care Planning) 記録テーブル
+    - JSONB: `participants`, `care_preferences`, `treatment_preferences`, `spiritual_preferences`
+    - DNAR/POLST管理、終末期医療意思決定記録
+    - バージョン管理、見直し頻度追跡、代理人情報管理
+
+12. **`012_create_logistics_locations.sql`** - ロジスティクス拠点テーブル
+    - JSONB: `operating_hours`, `service_area`, `facilities`
+    - Generated Column: `full_address`
+    - Google Maps連携 (Place ID)、ルート最適化起点/終点管理
+
+13. **`013_create_route_optimization_jobs.sql`** - ルート最適化ジョブ履歴テーブル
+    - JSONB: `optimization_params`, `google_api_request_payload`, `google_api_response_payload`, `optimized_route`
+    - Generated Columns: `total_visits_count`, `total_distance_km`, `total_duration_hours`, `execution_duration_seconds`
+    - Google Maps Route Optimization API連携記録、コスト削減効果追跡
+
+14. **`014_create_audit_access_logs.sql`** - 監査ログテーブル (3省2ガイドライン準拠)
+    - JSONB: `accessed_fields`, `modified_fields`, `previous_values`, `new_values`, `geolocation`
+    - Generated Column: `retention_expires_at`
+    - 5年保存、全アクセス記録、失敗ログ、機密データ追跡
 
 ## 適用方法
 
