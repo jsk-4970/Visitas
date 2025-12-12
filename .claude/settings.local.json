@@ -33,7 +33,12 @@
       "Bash(SPANNER_EMULATOR_HOST=localhost:9010 go test:*)",
       "Bash(done)",
       "Bash(xargs:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(go run:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(pkill:*)",
+      "Bash(SPANNER_EMULATOR_HOST=localhost:9010 gcloud config set:*)",
+      "Bash(SPANNER_EMULATOR_HOST=localhost:9010 gcloud spanner instances create:*)"
     ]
   }
 }

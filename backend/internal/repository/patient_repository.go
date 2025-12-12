@@ -92,21 +92,19 @@ func (r *PatientRepository) CreatePatient(ctx context.Context, req *models.Patie
 
 // GetPatientByID retrieves a patient by ID
 func (r *PatientRepository) GetPatientByID(ctx context.Context, patientID string) (*models.Patient, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			patient_id, birth_date, gender, blood_type,
-			name_history, contact_points, addresses, consent_details,
-			current_family_name, current_given_name, primary_phone,
-			current_prefecture, current_city,
+			name_history::text, COALESCE(contact_points::text, '[]'), COALESCE(addresses::text, '[]'), consent_details::text,
+			COALESCE(current_family_name, ''), COALESCE(current_given_name, ''), COALESCE(primary_phone, ''),
+			COALESCE(current_prefecture, ''), COALESCE(current_city, ''),
 			consent_status, consent_obtained_at, consent_withdrawn_at,
 			deleted, deleted_at, deleted_reason,
 			created_at, created_by, updated_at, updated_by
 		FROM patients
 		WHERE patient_id = @patientID AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -130,8 +128,7 @@ func (r *PatientRepository) GetPatientByID(ctx context.Context, patientID string
 // GetPatientsByStaffID retrieves all patients assigned to a staff member (RLS implementation)
 func (r *PatientRepository) GetPatientsByStaffID(ctx context.Context, staffID string, limit, offset int) ([]*models.Patient, int, error) {
 	// Query using RLS view
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			p.patient_id, p.birth_date, p.gender, p.blood_type,
 			p.name_history, p.contact_points, p.addresses, p.consent_details,
 			p.current_family_name, p.current_given_name, p.primary_phone,
@@ -147,12 +144,11 @@ func (r *PatientRepository) GetPatientsByStaffID(ctx context.Context, staffID st
 			AND p.deleted = false
 		ORDER BY p.updated_at DESC
 		LIMIT @limit OFFSET @offset`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"staffID": staffID,
 			"limit":   limit,
 			"offset":  offset,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -176,18 +172,16 @@ func (r *PatientRepository) GetPatientsByStaffID(ctx context.Context, staffID st
 	}
 
 	// Get total count
-	countStmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as total
+	countStmt := NewStatement(`SELECT COUNT(*) as total
 		FROM patients p
 		INNER JOIN staff_patient_assignments spa
 			ON p.patient_id = spa.patient_id
 		WHERE spa.staff_id = @staffID
 			AND spa.status = 'active'
 			AND p.deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"staffID": staffID,
-		},
-	}
+		})
 
 	countIter := r.client.Single().Query(ctx, countStmt)
 	defer countIter.Stop()
@@ -345,17 +339,15 @@ func (r *PatientRepository) DeletePatient(ctx context.Context, patientID, delete
 
 // CheckStaffAccess verifies if a staff member has access to a patient (for RLS)
 func (r *PatientRepository) CheckStaffAccess(ctx context.Context, staffID, patientID string) (bool, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as count
+	stmt := NewStatement(`SELECT COUNT(*) as count
 		FROM staff_patient_assignments
 		WHERE staff_id = @staffID
 			AND patient_id = @patientID
 			AND status = 'active'`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"staffID":   staffID,
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

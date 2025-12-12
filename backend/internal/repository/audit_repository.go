@@ -87,20 +87,18 @@ func (r *AuditRepository) LogAccess(ctx context.Context, log *AuditLog) error {
 
 // GetLogsByPatientID retrieves audit logs for a specific patient
 func (r *AuditRepository) GetLogsByPatientID(ctx context.Context, patientID string, limit, offset int) ([]*AuditLog, int, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			log_id, event_time, actor_id, action, resource_id, patient_id,
 			accessed_fields, success, error_message, ip_address, user_agent
 		FROM audit_patient_access_logs
 		WHERE patient_id = @patientID
 		ORDER BY event_time DESC
 		LIMIT @limit OFFSET @offset`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
 			"limit":     limit,
 			"offset":    offset,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -124,14 +122,12 @@ func (r *AuditRepository) GetLogsByPatientID(ctx context.Context, patientID stri
 	}
 
 	// Get total count
-	countStmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as total
+	countStmt := NewStatement(`SELECT COUNT(*) as total
 		FROM audit_patient_access_logs
 		WHERE patient_id = @patientID`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	countIter := r.client.Single().Query(ctx, countStmt)
 	defer countIter.Stop()
@@ -151,20 +147,18 @@ func (r *AuditRepository) GetLogsByPatientID(ctx context.Context, patientID stri
 
 // GetLogsByActorID retrieves audit logs for a specific actor (staff member)
 func (r *AuditRepository) GetLogsByActorID(ctx context.Context, actorID string, limit, offset int) ([]*AuditLog, int, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			log_id, event_time, actor_id, action, resource_id, patient_id,
 			accessed_fields, success, error_message, ip_address, user_agent
 		FROM audit_patient_access_logs
 		WHERE actor_id = @actorID
 		ORDER BY event_time DESC
 		LIMIT @limit OFFSET @offset`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"actorID": actorID,
 			"limit":   limit,
 			"offset":  offset,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -188,14 +182,12 @@ func (r *AuditRepository) GetLogsByActorID(ctx context.Context, actorID string, 
 	}
 
 	// Get total count
-	countStmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as total
+	countStmt := NewStatement(`SELECT COUNT(*) as total
 		FROM audit_patient_access_logs
 		WHERE actor_id = @actorID`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"actorID": actorID,
-		},
-	}
+		})
 
 	countIter := r.client.Single().Query(ctx, countStmt)
 	defer countIter.Stop()
@@ -215,21 +207,19 @@ func (r *AuditRepository) GetLogsByActorID(ctx context.Context, actorID string, 
 
 // GetLogsByTimeRange retrieves audit logs within a time range
 func (r *AuditRepository) GetLogsByTimeRange(ctx context.Context, startTime, endTime time.Time, limit, offset int) ([]*AuditLog, int, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			log_id, event_time, actor_id, action, resource_id, patient_id,
 			accessed_fields, success, error_message, ip_address, user_agent
 		FROM audit_patient_access_logs
 		WHERE event_time >= @startTime AND event_time <= @endTime
 		ORDER BY event_time DESC
 		LIMIT @limit OFFSET @offset`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"startTime": startTime,
 			"endTime":   endTime,
 			"limit":     limit,
 			"offset":    offset,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -253,15 +243,13 @@ func (r *AuditRepository) GetLogsByTimeRange(ctx context.Context, startTime, end
 	}
 
 	// Get total count
-	countStmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as total
+	countStmt := NewStatement(`SELECT COUNT(*) as total
 		FROM audit_patient_access_logs
 		WHERE event_time >= @startTime AND event_time <= @endTime`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"startTime": startTime,
 			"endTime":   endTime,
-		},
-	}
+		})
 
 	countIter := r.client.Single().Query(ctx, countStmt)
 	defer countIter.Stop()
@@ -281,19 +269,17 @@ func (r *AuditRepository) GetLogsByTimeRange(ctx context.Context, startTime, end
 
 // GetFailedAccessLogs retrieves failed access attempts
 func (r *AuditRepository) GetFailedAccessLogs(ctx context.Context, limit, offset int) ([]*AuditLog, int, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			log_id, event_time, actor_id, action, resource_id, patient_id,
 			accessed_fields, success, error_message, ip_address, user_agent
 		FROM audit_patient_access_logs
 		WHERE success = false
 		ORDER BY event_time DESC
 		LIMIT @limit OFFSET @offset`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"limit":  limit,
 			"offset": offset,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

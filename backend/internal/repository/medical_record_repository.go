@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -52,30 +51,30 @@ func (r *MedicalRecordRepository) Create(ctx context.Context, patientID string, 
 		Deleted:        false,
 	}
 
-	// Convert JSONB field to sql.NullString
-	var soapContentStr sql.NullString
+	// Convert JSONB field to spanner.NullString
+	var soapContentStr spanner.NullString
 	if len(req.SOAPContent) > 0 {
-		soapContentStr = sql.NullString{String: string(req.SOAPContent), Valid: true}
+		soapContentStr = spanner.NullString{StringVal: string(req.SOAPContent), Valid: true}
 	}
 
 	// Convert optional fields to sql.Null types
-	var visitEndedAt sql.NullTime
+	var visitEndedAt spanner.NullTime
 	if req.VisitEndedAt != nil {
-		visitEndedAt = sql.NullTime{Time: *req.VisitEndedAt, Valid: true}
+		visitEndedAt = spanner.NullTime{Time: *req.VisitEndedAt, Valid: true}
 	}
 
-	var scheduleID, templateID, sourceRecordID, audioFileURL sql.NullString
+	var scheduleID, templateID, sourceRecordID, audioFileURL spanner.NullString
 	if req.ScheduleID != nil {
-		scheduleID = sql.NullString{String: *req.ScheduleID, Valid: true}
+		scheduleID = spanner.NullString{StringVal: *req.ScheduleID, Valid: true}
 	}
 	if req.TemplateID != nil {
-		templateID = sql.NullString{String: *req.TemplateID, Valid: true}
+		templateID = spanner.NullString{StringVal: *req.TemplateID, Valid: true}
 	}
 	if req.SourceRecordID != nil {
-		sourceRecordID = sql.NullString{String: *req.SourceRecordID, Valid: true}
+		sourceRecordID = spanner.NullString{StringVal: *req.SourceRecordID, Valid: true}
 	}
 	if req.AudioFileURL != nil {
-		audioFileURL = sql.NullString{String: *req.AudioFileURL, Valid: true}
+		audioFileURL = spanner.NullString{StringVal: *req.AudioFileURL, Valid: true}
 	}
 
 	mutation := spanner.Insert("medical_records",
@@ -107,23 +106,21 @@ func (r *MedicalRecordRepository) Create(ctx context.Context, patientID string, 
 
 // GetByID retrieves a medical record by ID
 func (r *MedicalRecordRepository) GetByID(ctx context.Context, patientID, recordID string) (*models.MedicalRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			record_id, patient_id,
 			visit_started_at, visit_ended_at, visit_type, performed_by, status,
-			schedule_id, soap_content,
+			schedule_id, soap_content::text,
 			template_id, source_record_id, source_type, audio_file_url,
-			soap_completed, has_ai_assistance,
+			COALESCE(soap_completed, false), COALESCE(has_ai_assistance, false),
 			version,
-			created_at, created_by, updated_at, updated_by,
-			deleted, deleted_at, deleted_by
+			created_at, created_by, updated_at, COALESCE(updated_by, ''),
+			deleted, deleted_at, COALESCE(deleted_by, '')
 		FROM medical_records
-		WHERE patient_id = @patient_id AND record_id = @record_id AND deleted = false`,
-		Params: map[string]interface{}{
-			"patient_id": patientID,
-			"record_id":  recordID,
-		},
-	}
+		WHERE patient_id = @patientID AND record_id = @recordID AND deleted = false`,
+		map[string]interface{}{
+			"patientID": patientID,
+			"recordID":  recordID,
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -206,24 +203,23 @@ func (r *MedicalRecordRepository) List(ctx context.Context, filter *models.Medic
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = int64(limit)
+	params["offset"] = int64(offset)
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			record_id, patient_id,
 			visit_started_at, visit_ended_at, visit_type, performed_by, status,
-			schedule_id, soap_content,
+			schedule_id, soap_content::text,
 			template_id, source_record_id, source_type, audio_file_url,
-			soap_completed, has_ai_assistance,
+			COALESCE(soap_completed, false), COALESCE(has_ai_assistance, false),
 			version,
-			created_at, created_by, updated_at, updated_by,
-			deleted, deleted_at, deleted_by
+			created_at, created_by, updated_at, COALESCE(updated_by, ''),
+			deleted, deleted_at, COALESCE(deleted_by, '')
 		FROM medical_records
 		%s
 		ORDER BY visit_started_at DESC, created_at DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = int64(limit)
-	stmt.Params["offset"] = int64(offset)
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -260,7 +256,7 @@ func (r *MedicalRecordRepository) Update(ctx context.Context, patientID, recordI
 	updates := make(map[string]interface{})
 
 	if req.VisitEndedAt != nil {
-		updates["visit_ended_at"] = sql.NullTime{Time: *req.VisitEndedAt, Valid: true}
+		updates["visit_ended_at"] = spanner.NullTime{Time: *req.VisitEndedAt, Valid: true}
 		existing.VisitEndedAt = req.VisitEndedAt
 	}
 
@@ -275,22 +271,22 @@ func (r *MedicalRecordRepository) Update(ctx context.Context, patientID, recordI
 	}
 
 	if len(req.SOAPContent) > 0 {
-		updates["soap_content"] = sql.NullString{String: string(req.SOAPContent), Valid: true}
+		updates["soap_content"] = spanner.NullString{StringVal: string(req.SOAPContent), Valid: true}
 		existing.SOAPContent = req.SOAPContent
 	}
 
 	if req.ScheduleID != nil {
-		updates["schedule_id"] = sql.NullString{String: *req.ScheduleID, Valid: true}
+		updates["schedule_id"] = spanner.NullString{StringVal: *req.ScheduleID, Valid: true}
 		existing.ScheduleID = req.ScheduleID
 	}
 
 	if req.TemplateID != nil {
-		updates["template_id"] = sql.NullString{String: *req.TemplateID, Valid: true}
+		updates["template_id"] = spanner.NullString{StringVal: *req.TemplateID, Valid: true}
 		existing.TemplateID = req.TemplateID
 	}
 
 	if req.AudioFileURL != nil {
-		updates["audio_file_url"] = sql.NullString{String: *req.AudioFileURL, Valid: true}
+		updates["audio_file_url"] = spanner.NullString{StringVal: *req.AudioFileURL, Valid: true}
 		existing.AudioFileURL = req.AudioFileURL
 	}
 
@@ -301,7 +297,7 @@ func (r *MedicalRecordRepository) Update(ctx context.Context, patientID, recordI
 	// Update audit fields
 	now := time.Now()
 	updates["updated_at"] = now
-	updates["updated_by"] = sql.NullString{String: updatedBy, Valid: true}
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
 	existing.UpdatedAt = now
 	existing.UpdatedBy = &updatedBy
 
@@ -345,7 +341,7 @@ func (r *MedicalRecordRepository) UpdateWithVersion(ctx context.Context, patient
 	updates := make(map[string]interface{})
 
 	if req.VisitEndedAt != nil {
-		updates["visit_ended_at"] = sql.NullTime{Time: *req.VisitEndedAt, Valid: true}
+		updates["visit_ended_at"] = spanner.NullTime{Time: *req.VisitEndedAt, Valid: true}
 		existing.VisitEndedAt = req.VisitEndedAt
 	}
 
@@ -360,22 +356,22 @@ func (r *MedicalRecordRepository) UpdateWithVersion(ctx context.Context, patient
 	}
 
 	if len(req.SOAPContent) > 0 {
-		updates["soap_content"] = sql.NullString{String: string(req.SOAPContent), Valid: true}
+		updates["soap_content"] = spanner.NullString{StringVal: string(req.SOAPContent), Valid: true}
 		existing.SOAPContent = req.SOAPContent
 	}
 
 	if req.ScheduleID != nil {
-		updates["schedule_id"] = sql.NullString{String: *req.ScheduleID, Valid: true}
+		updates["schedule_id"] = spanner.NullString{StringVal: *req.ScheduleID, Valid: true}
 		existing.ScheduleID = req.ScheduleID
 	}
 
 	if req.TemplateID != nil {
-		updates["template_id"] = sql.NullString{String: *req.TemplateID, Valid: true}
+		updates["template_id"] = spanner.NullString{StringVal: *req.TemplateID, Valid: true}
 		existing.TemplateID = req.TemplateID
 	}
 
 	if req.AudioFileURL != nil {
-		updates["audio_file_url"] = sql.NullString{String: *req.AudioFileURL, Valid: true}
+		updates["audio_file_url"] = spanner.NullString{StringVal: *req.AudioFileURL, Valid: true}
 		existing.AudioFileURL = req.AudioFileURL
 	}
 
@@ -386,7 +382,7 @@ func (r *MedicalRecordRepository) UpdateWithVersion(ctx context.Context, patient
 	// Update audit fields
 	now := time.Now()
 	updates["updated_at"] = now
-	updates["updated_by"] = sql.NullString{String: updatedBy, Valid: true}
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
 	existing.UpdatedAt = now
 	existing.UpdatedBy = &updatedBy
 
@@ -427,10 +423,10 @@ func (r *MedicalRecordRepository) Delete(ctx context.Context, patientID, recordI
 		[]interface{}{
 			recordID,
 			true,
-			sql.NullTime{Time: now, Valid: true},
-			sql.NullString{String: deletedBy, Valid: true},
+			spanner.NullTime{Time: now, Valid: true},
+			spanner.NullString{StringVal: deletedBy, Valid: true},
 			now,
-			sql.NullString{String: deletedBy, Valid: true},
+			spanner.NullString{StringVal: deletedBy, Valid: true},
 		},
 	)
 
@@ -448,25 +444,23 @@ func (r *MedicalRecordRepository) GetLatestByPatient(ctx context.Context, patien
 		limit = 10
 	}
 
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			record_id, patient_id,
 			visit_started_at, visit_ended_at, visit_type, performed_by, status,
-			schedule_id, soap_content,
+			schedule_id, soap_content::text,
 			template_id, source_record_id, source_type, audio_file_url,
-			soap_completed, has_ai_assistance,
+			COALESCE(soap_completed, false), COALESCE(has_ai_assistance, false),
 			version,
-			created_at, created_by, updated_at, updated_by,
-			deleted, deleted_at, deleted_by
+			created_at, created_by, updated_at, COALESCE(updated_by, ''),
+			deleted, deleted_at, COALESCE(deleted_by, '')
 		FROM medical_records
-		WHERE patient_id = @patient_id AND deleted = false
+		WHERE patient_id = @patientID AND deleted = false
 		ORDER BY visit_started_at DESC, created_at DESC
 		LIMIT @limit`,
-		Params: map[string]interface{}{
-			"patient_id": patientID,
-			"limit":      int64(limit),
-		},
-	}
+		map[string]interface{}{
+			"patientID": patientID,
+			"limit":     int64(limit),
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -493,23 +487,21 @@ func (r *MedicalRecordRepository) GetLatestByPatient(ctx context.Context, patien
 
 // GetByScheduleID retrieves medical records by schedule ID
 func (r *MedicalRecordRepository) GetByScheduleID(ctx context.Context, scheduleID string) ([]*models.MedicalRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			record_id, patient_id,
 			visit_started_at, visit_ended_at, visit_type, performed_by, status,
-			schedule_id, soap_content,
+			schedule_id, soap_content::text,
 			template_id, source_record_id, source_type, audio_file_url,
-			soap_completed, has_ai_assistance,
+			COALESCE(soap_completed, false), COALESCE(has_ai_assistance, false),
 			version,
-			created_at, created_by, updated_at, updated_by,
-			deleted, deleted_at, deleted_by
+			created_at, created_by, updated_at, COALESCE(updated_by, ''),
+			deleted, deleted_at, COALESCE(deleted_by, '')
 		FROM medical_records
-		WHERE schedule_id = @schedule_id AND deleted = false
+		WHERE schedule_id = @scheduleID AND deleted = false
 		ORDER BY visit_started_at DESC`,
-		Params: map[string]interface{}{
-			"schedule_id": scheduleID,
-		},
-	}
+		map[string]interface{}{
+			"scheduleID": scheduleID,
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -536,23 +528,21 @@ func (r *MedicalRecordRepository) GetByScheduleID(ctx context.Context, scheduleI
 
 // GetDraftRecords retrieves draft or in-progress medical records
 func (r *MedicalRecordRepository) GetDraftRecords(ctx context.Context, performedBy string) ([]*models.MedicalRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			record_id, patient_id,
 			visit_started_at, visit_ended_at, visit_type, performed_by, status,
-			schedule_id, soap_content,
+			schedule_id, soap_content::text,
 			template_id, source_record_id, source_type, audio_file_url,
-			soap_completed, has_ai_assistance,
+			COALESCE(soap_completed, false), COALESCE(has_ai_assistance, false),
 			version,
-			created_at, created_by, updated_at, updated_by,
-			deleted, deleted_at, deleted_by
+			created_at, created_by, updated_at, COALESCE(updated_by, ''),
+			deleted, deleted_at, COALESCE(deleted_by, '')
 		FROM medical_records
-		WHERE performed_by = @performed_by AND status IN ('draft', 'in_progress') AND deleted = false
+		WHERE performed_by = @performedBy AND status IN ('draft', 'in_progress') AND deleted = false
 		ORDER BY visit_started_at DESC`,
-		Params: map[string]interface{}{
-			"performed_by": performedBy,
-		},
-	}
+		map[string]interface{}{
+			"performedBy": performedBy,
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -582,12 +572,12 @@ func scanMedicalRecord(row *spanner.Row) (*models.MedicalRecord, error) {
 	var record models.MedicalRecord
 
 	// Nullable fields
-	var visitEndedAt sql.NullTime
-	var scheduleID, soapContentStr sql.NullString
-	var templateID, sourceRecordID, audioFileURL sql.NullString
-	var soapCompleted, hasAIAssistance sql.NullBool
-	var updatedBy, deletedBy sql.NullString
-	var deletedAt sql.NullTime
+	var visitEndedAt spanner.NullTime
+	var scheduleID, soapContentStr spanner.NullString
+	var templateID, sourceRecordID, audioFileURL spanner.NullString
+	var updatedByStr, deletedByStr string
+	var deletedAt spanner.NullTime
+	var version int64
 
 	err := row.Columns(
 		&record.RecordID,
@@ -603,54 +593,55 @@ func scanMedicalRecord(row *spanner.Row) (*models.MedicalRecord, error) {
 		&sourceRecordID,
 		&record.SourceType,
 		&audioFileURL,
-		&soapCompleted,
-		&hasAIAssistance,
-		&record.Version,
+		&record.SOAPCompleted,
+		&record.HasAIAssistance,
+		&version,
 		&record.CreatedAt,
 		&record.CreatedBy,
 		&record.UpdatedAt,
-		&updatedBy,
+		&updatedByStr,
 		&record.Deleted,
 		&deletedAt,
-		&deletedBy,
+		&deletedByStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan medical record: %w", err)
 	}
+
+	// Assign version
+	record.Version = int(version)
 
 	// Convert nullable fields
 	if visitEndedAt.Valid {
 		record.VisitEndedAt = &visitEndedAt.Time
 	}
 	if scheduleID.Valid {
-		record.ScheduleID = &scheduleID.String
+		s := scheduleID.StringVal
+		record.ScheduleID = &s
 	}
 	if soapContentStr.Valid {
-		record.SOAPContent = json.RawMessage(soapContentStr.String)
+		record.SOAPContent = json.RawMessage(soapContentStr.StringVal)
 	}
 	if templateID.Valid {
-		record.TemplateID = &templateID.String
+		s := templateID.StringVal
+		record.TemplateID = &s
 	}
 	if sourceRecordID.Valid {
-		record.SourceRecordID = &sourceRecordID.String
+		s := sourceRecordID.StringVal
+		record.SourceRecordID = &s
 	}
 	if audioFileURL.Valid {
-		record.AudioFileURL = &audioFileURL.String
+		s := audioFileURL.StringVal
+		record.AudioFileURL = &s
 	}
-	if soapCompleted.Valid {
-		record.SOAPCompleted = soapCompleted.Bool
-	}
-	if hasAIAssistance.Valid {
-		record.HasAIAssistance = hasAIAssistance.Bool
-	}
-	if updatedBy.Valid {
-		record.UpdatedBy = &updatedBy.String
+	if updatedByStr != "" {
+		record.UpdatedBy = &updatedByStr
 	}
 	if deletedAt.Valid {
 		record.DeletedAt = &deletedAt.Time
 	}
-	if deletedBy.Valid {
-		record.DeletedBy = &deletedBy.String
+	if deletedByStr != "" {
+		record.DeletedBy = &deletedByStr
 	}
 
 	return &record, nil

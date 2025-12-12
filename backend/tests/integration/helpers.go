@@ -346,7 +346,7 @@ func (ts *TestServer) CreateTestPatient(t *testing.T) string {
 	require.NotEmpty(t, patientID, "patient_id is empty")
 
 	// Assign the test patient to the test staff
-	assignJSON := fmt.Sprintf(`{"staff_id": "test-staff-id"}`)
+	assignJSON := fmt.Sprintf(`{"staff_id": "test-staff-id", "role": "doctor", "assignment_type": "primary"}`)
 	assignResp := ts.MakeRequest(t, http.MethodPost, fmt.Sprintf("/api/v1/patients/%s/assign", patientID), strings.NewReader(assignJSON))
 	require.Equal(t, http.StatusOK, assignResp.StatusCode, "Failed to assign patient to staff")
 

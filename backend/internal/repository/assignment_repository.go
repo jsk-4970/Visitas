@@ -99,17 +99,15 @@ func (r *AssignmentRepository) CreateAssignment(ctx context.Context, staffID, pa
 
 // GetAssignmentByID retrieves an assignment by ID
 func (r *AssignmentRepository) GetAssignmentByID(ctx context.Context, assignmentID string) (*StaffPatientAssignment, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			assignment_id, staff_id, patient_id, role, assignment_type,
-			status, assigned_at, assigned_by, inactivated_at, inactivated_by,
+			status, assigned_at, assigned_by, inactivated_at, COALESCE(inactivated_by, ''),
 			created_at, updated_at
 		FROM staff_patient_assignments
 		WHERE assignment_id = @assignmentID`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"assignmentID": assignmentID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -134,7 +132,7 @@ func (r *AssignmentRepository) GetAssignmentByID(ctx context.Context, assignment
 func (r *AssignmentRepository) GetAssignmentsByStaffID(ctx context.Context, staffID string, activeOnly bool) ([]*StaffPatientAssignment, error) {
 	sqlQuery := `SELECT
 		assignment_id, staff_id, patient_id, role, assignment_type,
-		status, assigned_at, assigned_by, inactivated_at, inactivated_by,
+		status, assigned_at, assigned_by, inactivated_at, COALESCE(inactivated_by, ''),
 		created_at, updated_at
 	FROM staff_patient_assignments
 	WHERE staff_id = @staffID`
@@ -145,12 +143,10 @@ func (r *AssignmentRepository) GetAssignmentsByStaffID(ctx context.Context, staf
 
 	sqlQuery += ` ORDER BY assigned_at DESC`
 
-	stmt := spanner.Statement{
-		SQL: sqlQuery,
-		Params: map[string]interface{}{
+	stmt := NewStatement(sqlQuery,
+		map[string]interface{}{
 			"staffID": staffID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -180,7 +176,7 @@ func (r *AssignmentRepository) GetAssignmentsByStaffID(ctx context.Context, staf
 func (r *AssignmentRepository) GetAssignmentsByPatientID(ctx context.Context, patientID string, activeOnly bool) ([]*StaffPatientAssignment, error) {
 	sqlQuery := `SELECT
 		assignment_id, staff_id, patient_id, role, assignment_type,
-		status, assigned_at, assigned_by, inactivated_at, inactivated_by,
+		status, assigned_at, assigned_by, inactivated_at, COALESCE(inactivated_by, ''),
 		created_at, updated_at
 	FROM staff_patient_assignments
 	WHERE patient_id = @patientID`
@@ -191,12 +187,10 @@ func (r *AssignmentRepository) GetAssignmentsByPatientID(ctx context.Context, pa
 
 	sqlQuery += ` ORDER BY assignment_type ASC, assigned_at DESC`
 
-	stmt := spanner.Statement{
-		SQL: sqlQuery,
-		Params: map[string]interface{}{
+	stmt := NewStatement(sqlQuery,
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -264,17 +258,15 @@ func (r *AssignmentRepository) ReactivateAssignment(ctx context.Context, assignm
 
 // CheckAssignment verifies if a staff member is assigned to a patient
 func (r *AssignmentRepository) CheckAssignment(ctx context.Context, staffID, patientID string) (bool, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as count
+	stmt := NewStatement(`SELECT COUNT(*) as count
 		FROM staff_patient_assignments
 		WHERE staff_id = @staffID
 			AND patient_id = @patientID
 			AND status = 'active'`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"staffID":   staffID,
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -294,10 +286,9 @@ func (r *AssignmentRepository) CheckAssignment(ctx context.Context, staffID, pat
 
 // GetPrimaryAssignment retrieves the primary assignment for a patient by role
 func (r *AssignmentRepository) GetPrimaryAssignment(ctx context.Context, patientID string, role StaffRole) (*StaffPatientAssignment, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			assignment_id, staff_id, patient_id, role, assignment_type,
-			status, assigned_at, assigned_by, inactivated_at, inactivated_by,
+			status, assigned_at, assigned_by, inactivated_at, COALESCE(inactivated_by, ''),
 			created_at, updated_at
 		FROM staff_patient_assignments
 		WHERE patient_id = @patientID
@@ -305,11 +296,10 @@ func (r *AssignmentRepository) GetPrimaryAssignment(ctx context.Context, patient
 			AND assignment_type = 'primary'
 			AND status = 'active'
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
 			"role":      string(role),
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
