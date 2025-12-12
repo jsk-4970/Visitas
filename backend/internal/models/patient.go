@@ -16,34 +16,43 @@ type Patient struct {
 	BloodType string       `json:"blood_type,omitempty" spanner:"blood_type"`
 
 	// JSONB Fields (stored as JSON in database)
-	// Name includes previousNames array internally
-	Name           json.RawMessage `json:"name" spanner:"name"`
+	NameHistory    json.RawMessage `json:"name_history" spanner:"name_history"`
 	ContactPoints  json.RawMessage `json:"contact_points,omitempty" spanner:"contact_points"`
 	Addresses      json.RawMessage `json:"addresses,omitempty" spanner:"addresses"`
-	ConsentRecords json.RawMessage `json:"consent_records,omitempty" spanner:"consent_records"`
-
-	// Photo
-	PhotoURL string `json:"photo_url,omitempty" spanner:"photo_url"`
+	ConsentDetails json.RawMessage `json:"consent_details,omitempty" spanner:"consent_details"`
 
 	// Generated Columns (read-only from database)
-	FullName     string `json:"full_name,omitempty" spanner:"full_name"`
-	FullNameKana string `json:"full_name_kana,omitempty" spanner:"full_name_kana"`
-	PrimaryPhone string `json:"primary_phone,omitempty" spanner:"primary_phone"`
+	CurrentFamilyName string `json:"current_family_name,omitempty" spanner:"current_family_name"`
+	CurrentGivenName  string `json:"current_given_name,omitempty" spanner:"current_given_name"`
+	PrimaryPhone      string `json:"primary_phone,omitempty" spanner:"primary_phone"`
+	CurrentPrefecture string `json:"current_prefecture,omitempty" spanner:"current_prefecture"`
+	CurrentCity       string `json:"current_city,omitempty" spanner:"current_city"`
 
-	// System Management
-	Active bool `json:"active" spanner:"active"`
+	// Consent Management
+	ConsentStatus      string        `json:"consent_status" spanner:"consent_status"`
+	ConsentObtainedAt  *time.Time    `json:"consent_obtained_at,omitempty" spanner:"consent_obtained_at"`
+	ConsentWithdrawnAt *time.Time    `json:"consent_withdrawn_at,omitempty" spanner:"consent_withdrawn_at"`
 
 	// Soft Delete
-	IsDeleted bool         `json:"is_deleted" spanner:"is_deleted"`
-	DeletedAt sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
+	Deleted       bool       `json:"deleted" spanner:"deleted"`
+	DeletedAt     *time.Time `json:"deleted_at,omitempty" spanner:"deleted_at"`
+	DeletedReason string     `json:"deleted_reason,omitempty" spanner:"deleted_reason"`
 
 	// Audit Timestamps
 	CreatedAt time.Time `json:"created_at" spanner:"created_at"`
+	CreatedBy string    `json:"created_by" spanner:"created_by"`
 	UpdatedAt time.Time `json:"updated_at" spanner:"updated_at"`
+	UpdatedBy string    `json:"updated_by" spanner:"updated_by"`
+}
 
-	// Security
-	DataClassification   string `json:"data_classification" spanner:"data_classification"`
-	EncryptionKeyVersion int    `json:"encryption_key_version" spanner:"encryption_key_version"`
+// NameRecord represents a single name entry (used in name_history array)
+type NameRecord struct {
+	Family       string     `json:"family"`
+	Given        string     `json:"given"`
+	Kana         string     `json:"kana,omitempty"`
+	ValidFrom    time.Time  `json:"valid_from"`
+	ValidTo      *time.Time `json:"valid_to,omitempty"`
+	ChangeReason string     `json:"change_reason,omitempty"` // 婚姻, 離婚, etc.
 }
 
 // Name represents patient name with history
@@ -106,8 +115,8 @@ type PatientCreateRequest struct {
 	Gender    string `json:"gender" validate:"required"`
 	BloodType string `json:"blood_type,omitempty"`
 
-	// Name (will be stored as JSONB object)
-	Name Name `json:"name" validate:"required"`
+	// Name (will be stored as name_history JSONB array)
+	Name NameRecord `json:"name" validate:"required"`
 
 	// Contact Points (JSONB array)
 	ContactPoints []ContactPoint `json:"contact_points,omitempty"`
@@ -115,11 +124,9 @@ type PatientCreateRequest struct {
 	// Addresses (JSONB array)
 	Addresses []Address `json:"addresses,omitempty"`
 
-	// Photo
-	PhotoURL string `json:"photo_url,omitempty"`
-
-	// Consent Records (JSONB)
-	ConsentRecords json.RawMessage `json:"consent_records,omitempty"`
+	// Consent
+	ConsentStatus     string     `json:"consent_status"`
+	ConsentObtainedAt *time.Time `json:"consent_obtained_at,omitempty"`
 }
 
 // PatientUpdateRequest represents the request payload for updating a patient
@@ -129,23 +136,23 @@ type PatientUpdateRequest struct {
 	Gender    *string `json:"gender,omitempty"`
 	BloodType *string `json:"blood_type,omitempty"`
 
-	// Name (will update the entire name object)
-	Name *Name `json:"name,omitempty"`
+	// Add a new name to name_history
+	AddName *NameRecord `json:"add_name,omitempty"`
 
 	// Update contact points (replaces entire array)
 	ContactPoints *[]ContactPoint `json:"contact_points,omitempty"`
+	// Add a single contact point
+	AddContactPoint *ContactPoint `json:"add_contact_point,omitempty"`
 
 	// Update addresses (replaces entire array)
 	Addresses *[]Address `json:"addresses,omitempty"`
+	// Add a single address
+	AddAddress *Address `json:"add_address,omitempty"`
 
-	// Photo
-	PhotoURL *string `json:"photo_url,omitempty"`
-
-	// Consent Records
-	ConsentRecords *json.RawMessage `json:"consent_records,omitempty"`
-
-	// Active status
-	Active *bool `json:"active,omitempty"`
+	// Consent
+	ConsentStatus      *string    `json:"consent_status,omitempty"`
+	ConsentObtainedAt  *time.Time `json:"consent_obtained_at,omitempty"`
+	ConsentWithdrawnAt *time.Time `json:"consent_withdrawn_at,omitempty"`
 }
 
 // PatientListResponse represents paginated patient list
@@ -157,14 +164,14 @@ type PatientListResponse struct {
 	TotalPages int       `json:"total_pages"`
 }
 
-// Helper method to convert Name to structured format
-func (p *Patient) GetName() (*Name, error) {
-	var name Name
-	if len(p.Name) == 0 {
-		return nil, nil
+// Helper method to convert NameHistory to structured format
+func (p *Patient) GetNameHistory() ([]NameRecord, error) {
+	var nameHistory []NameRecord
+	if len(p.NameHistory) == 0 {
+		return nameHistory, nil
 	}
-	err := json.Unmarshal(p.Name, &name)
-	return &name, err
+	err := json.Unmarshal(p.NameHistory, &nameHistory)
+	return nameHistory, err
 }
 
 // Helper method to convert ContactPoints to structured format
