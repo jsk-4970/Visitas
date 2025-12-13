@@ -32,7 +32,7 @@ func (r *AllergyIntoleranceRepository) CreateAllergy(ctx context.Context, req *m
 	// Marshal reactions to JSONB
 	var reactionsJSON []byte
 	var err error
-	if req.Reactions != nil && len(req.Reactions) > 0 {
+	if len(req.Reactions) > 0 {
 		reactionsJSON, err = json.Marshal(req.Reactions)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal reactions: %w", err)
