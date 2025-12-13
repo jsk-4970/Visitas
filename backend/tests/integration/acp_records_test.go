@@ -526,11 +526,7 @@ func TestACPRecord_Integration_ValidationErrors(t *testing.T) {
 			requestBody:    fmt.Sprintf(`{"recorded_date": "%s", "status": "active", "decision_maker": "patient", "created_by": "test-staff-id"}`, time.Now().Format(time.RFC3339)),
 			expectedStatus: http.StatusBadRequest,
 		},
-		{
-			name:           "Missing created_by",
-			requestBody:    fmt.Sprintf(`{"recorded_date": "%s", "status": "active", "decision_maker": "patient", "directives": %s}`, time.Now().Format(time.RFC3339), string(directivesJSON)),
-			expectedStatus: http.StatusBadRequest,
-		},
+		// Note: "created_by" is not validated from request body as it's set from auth context
 	}
 
 	for _, tt := range tests {

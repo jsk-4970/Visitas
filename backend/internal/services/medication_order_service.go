@@ -91,6 +91,12 @@ func (s *MedicationOrderService) CreateMedicationOrder(ctx context.Context, pati
 		return nil, fmt.Errorf("prescribed_by is required")
 	}
 
+	// Validate prescribed_date is not zero
+	if req.PrescribedDate.IsZero() {
+		logger.WarnContext(ctx, "Missing prescribed_date", nil)
+		return nil, fmt.Errorf("prescribed_date is required")
+	}
+
 	order, err := s.medicationOrderRepo.Create(ctx, patientID, req)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to create medication order", err, map[string]interface{}{

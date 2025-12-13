@@ -44,7 +44,8 @@
       "Bash(echo:*)",
       "Bash(docker-compose:*)",
       "Bash(docker restart:*)",
-      "Bash(export SPANNER_EMULATOR_HOST=\"localhost:9010\")"
+      "Bash(export SPANNER_EMULATOR_HOST=\"localhost:9010\")",
+      "Bash(tee:*)"
     ]
   }
 }

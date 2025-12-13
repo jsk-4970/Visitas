@@ -89,6 +89,12 @@ func (s *CarePlanService) CreateCarePlan(ctx context.Context, patientID string, 
 		return nil, fmt.Errorf("title is required")
 	}
 
+	// Validate period_start is not zero
+	if req.PeriodStart.IsZero() {
+		logger.WarnContext(ctx, "Missing period_start", nil)
+		return nil, fmt.Errorf("period_start is required")
+	}
+
 	plan, err := s.carePlanRepo.Create(ctx, patientID, req)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to create care plan", err, map[string]interface{}{

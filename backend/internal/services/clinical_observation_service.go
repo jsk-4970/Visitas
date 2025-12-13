@@ -87,6 +87,12 @@ func (s *ClinicalObservationService) CreateClinicalObservation(ctx context.Conte
 		return nil, fmt.Errorf("value is required")
 	}
 
+	// Validate effective_datetime is not zero
+	if req.EffectiveDatetime.IsZero() {
+		logger.WarnContext(ctx, "Missing effective_datetime", nil)
+		return nil, fmt.Errorf("effective_datetime is required")
+	}
+
 	observation, err := s.clinicalObservationRepo.Create(ctx, patientID, req)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to create clinical observation", err, map[string]interface{}{
