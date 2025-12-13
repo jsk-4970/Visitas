@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // InsuranceType represents the type of insurance coverage
@@ -37,17 +38,17 @@ type PatientCoverage struct {
 	CopayRate     int    `json:"copay_rate" spanner:"copay_rate"`                      // Percentage
 
 	// Validity Period
-	ValidFrom sql.NullTime `json:"valid_from" spanner:"valid_from"`
-	ValidTo   sql.NullTime `json:"valid_to,omitempty" spanner:"valid_to"`
+	ValidFrom spanner.NullTime `json:"valid_from" spanner:"valid_from"`
+	ValidTo   spanner.NullTime `json:"valid_to,omitempty" spanner:"valid_to"`
 
 	// Status
 	Status   string `json:"status" spanner:"status"`
 	Priority int    `json:"priority" spanner:"priority"` // Lower number = higher priority
 
 	// Verification
-	VerificationStatus string       `json:"verification_status" spanner:"verification_status"`
-	VerifiedAt         sql.NullTime `json:"verified_at,omitempty" spanner:"verified_at"`
-	VerifiedBy         string       `json:"verified_by,omitempty" spanner:"verified_by"`
+	VerificationStatus string           `json:"verification_status" spanner:"verification_status"`
+	VerifiedAt         spanner.NullTime `json:"verified_at,omitempty" spanner:"verified_at"`
+	VerifiedBy         string           `json:"verified_by,omitempty" spanner:"verified_by"`
 
 	// Audit Timestamps
 	CreatedAt time.Time `json:"created_at" spanner:"created_at"`
@@ -56,8 +57,8 @@ type PatientCoverage struct {
 	UpdatedBy string    `json:"updated_by,omitempty" spanner:"updated_by"`
 
 	// Soft Delete
-	Deleted   bool         `json:"deleted" spanner:"deleted"`
-	DeletedAt sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
+	Deleted   bool             `json:"deleted" spanner:"deleted"`
+	DeletedAt spanner.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
 }
 
 // MedicalInsuranceDetails represents medical insurance details

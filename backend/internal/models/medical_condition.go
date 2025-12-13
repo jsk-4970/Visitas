@@ -1,8 +1,9 @@
 package models
 
 import (
-	"database/sql"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // ClinicalStatus represents the clinical status of a condition (FHIR)
@@ -62,17 +63,17 @@ type MedicalCondition struct {
 	BodySite string `json:"body_site,omitempty" spanner:"body_site"`
 
 	// Onset Information
-	OnsetDate sql.NullTime `json:"onset_date,omitempty" spanner:"onset_date"`
-	OnsetAge  int          `json:"onset_age,omitempty" spanner:"onset_age"`
-	OnsetNote string       `json:"onset_note,omitempty" spanner:"onset_note"`
+	OnsetDate spanner.NullTime `json:"onset_date,omitempty" spanner:"onset_date"`
+	OnsetAge  int              `json:"onset_age,omitempty" spanner:"onset_age"`
+	OnsetNote string           `json:"onset_note,omitempty" spanner:"onset_note"`
 
 	// Abatement Information (if resolved)
-	AbatementDate sql.NullTime `json:"abatement_date,omitempty" spanner:"abatement_date"`
-	AbatementNote string       `json:"abatement_note,omitempty" spanner:"abatement_note"`
+	AbatementDate spanner.NullTime `json:"abatement_date,omitempty" spanner:"abatement_date"`
+	AbatementNote string           `json:"abatement_note,omitempty" spanner:"abatement_note"`
 
 	// Recorded Information
-	RecordedDate sql.NullTime `json:"recorded_date" spanner:"recorded_date"`
-	RecordedBy   string       `json:"recorded_by,omitempty" spanner:"recorded_by"`
+	RecordedDate spanner.NullTime `json:"recorded_date" spanner:"recorded_date"`
+	RecordedBy   string           `json:"recorded_by,omitempty" spanner:"recorded_by"`
 
 	// Notes
 	ClinicalNotes   string `json:"clinical_notes,omitempty" spanner:"clinical_notes"`
@@ -85,8 +86,8 @@ type MedicalCondition struct {
 	UpdatedBy string    `json:"updated_by,omitempty" spanner:"updated_by"`
 
 	// Soft Delete
-	Deleted   bool         `json:"deleted" spanner:"deleted"`
-	DeletedAt sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
+	Deleted   bool             `json:"deleted" spanner:"deleted"`
+	DeletedAt spanner.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
 }
 
 // MedicalConditionCreateRequest represents the request to add a condition

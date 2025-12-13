@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // Patient represents the enhanced patient model aligned with DATABASE_REQUIREMENTS.md
@@ -11,8 +12,8 @@ type Patient struct {
 	PatientID string `json:"patient_id" spanner:"patient_id"`
 
 	// Basic Demographics
-	BirthDate sql.NullTime `json:"birth_date" spanner:"birth_date"`
-	Gender    string       `json:"gender" spanner:"gender"`
+	BirthDate spanner.NullTime `json:"birth_date" spanner:"birth_date"`
+	Gender    string           `json:"gender" spanner:"gender"`
 	BloodType string       `json:"blood_type,omitempty" spanner:"blood_type"`
 
 	// JSONB Fields (stored as JSON in database)
