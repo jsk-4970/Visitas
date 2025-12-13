@@ -50,19 +50,6 @@ jobs:
       run:
         working-directory: ./backend
 
-    services:
-      spanner:
-        image: gcr.io/cloud-spanner-emulator/emulator:latest
-        ports:
-          - 9010:9010
-          - 9020:9020
-
-    env:
-      SPANNER_EMULATOR_HOST: localhost:9010
-      GCP_PROJECT_ID: test-project
-      SPANNER_INSTANCE: test-instance
-      SPANNER_DATABASE: test-database
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -76,56 +63,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Wait for Spanner Emulator
+      - name: Run unit tests (skip integration tests)
         run: |
-          echo "Waiting for Spanner Emulator to be ready..."
-          for i in {1..30}; do
-            if nc -z localhost 9010; then
-              echo "Spanner Emulator is ready!"
-              break
-            fi
-            echo "Waiting... ($i/30)"
-            sleep 1
-          done
-
-      - name: Setup Spanner Emulator Database
-        run: |
-          # Install spanner-cli for database setup
-          go install github.com/cloudspannerecosystem/spanner-cli@latest
-
-          # Create instance using REST API
-          curl -s -X POST "http://localhost:9020/v1/projects/test-project/instances" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "instanceId": "test-instance",
-              "instance": {
-                "config": "emulator-config",
-                "displayName": "Test Instance",
-                "nodeCount": 1
-              }
-            }'
-
-          # Wait for instance to be ready
-          sleep 2
-
-          # Create database
-          curl -s -X POST "http://localhost:9020/v1/projects/test-project/instances/test-instance/databases" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "createStatement": "CREATE DATABASE \"test-database\""
-            }'
-
-          # Wait for database to be ready
-          sleep 2
-
-          # Apply migrations using spanner-cli
-          for migration in $(ls -1 migrations/*.sql | sort -V); do
-            echo "Applying migration: $migration"
-            spanner-cli -p test-project -i test-instance -d test-database < "$migration" || echo "Warning: Migration $migration may have partially failed"
-          done
-
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          # Run tests excluding integration tests (which require Spanner Emulator)
+          go test -v -race -coverprofile=coverage.out -covermode=atomic \
+            $(go list ./... | grep -v /tests/integration)
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

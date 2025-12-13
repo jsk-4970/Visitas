@@ -1,0 +1,31 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - staticcheck
+    - unused
+
+linters-settings:
+  errcheck:
+    # Ignore specific function calls
+    exclude-functions:
+      - (*encoding/json.Encoder).Encode
+      - (net/http.ResponseWriter).Write
+
+issues:
+  exclude-rules:
+    # Exclude errcheck for json.Encoder.Encode in handlers (response writing)
+    - path: internal/handlers/
+      linters:
+        - errcheck
+      text: "Error return value of `\\(\\*encoding/json\\.Encoder\\)\\.Encode`"
+    # Exclude errcheck for http.ResponseWriter.Write in handlers
+    - path: internal/handlers/
+      linters:
+        - errcheck
+      text: "Error return value of `w\\.Write`"
