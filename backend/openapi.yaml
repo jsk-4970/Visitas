@@ -297,6 +297,137 @@ components:
           enum: [normal, confidential, highly_confidential]
           default: highly_confidential
 
+    MedicalRecord:
+      type: object
+      required:
+        - record_id
+        - patient_id
+        - visit_started_at
+        - visit_type
+        - performed_by
+        - status
+        - source_type
+      properties:
+        record_id:
+          type: string
+          format: uuid
+          description: Unique medical record identifier
+        patient_id:
+          type: string
+          format: uuid
+        visit_started_at:
+          type: string
+          format: date-time
+        visit_ended_at:
+          type: string
+          format: date-time
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial, follow_up, terminal_care]
+        performed_by:
+          type: string
+          format: uuid
+          description: Staff ID who performed the visit
+        status:
+          type: string
+          enum: [draft, in_progress, completed, cancelled]
+        schedule_id:
+          type: string
+          format: uuid
+        soap_content:
+          type: object
+          description: JSONB field for SOAP notes (Subjective, Objective, Assessment, Plan)
+        template_id:
+          type: string
+          format: uuid
+        source_record_id:
+          type: string
+          format: uuid
+          description: Reference to copied source record
+        source_type:
+          type: string
+          enum: [manual, voice_to_text, ai_generated, template]
+        audio_file_url:
+          type: string
+          format: uri
+        soap_completed:
+          type: boolean
+          description: Generated column - true if all SOAP sections are filled
+          readOnly: true
+        has_ai_assistance:
+          type: boolean
+          description: Generated column - true if AI was used
+          readOnly: true
+        version:
+          type: integer
+          description: Optimistic locking version counter
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+          format: uuid
+        deleted:
+          type: boolean
+        deleted_at:
+          type: string
+          format: date-time
+        deleted_by:
+          type: string
+          format: uuid
+
+    MedicalRecordTemplate:
+      type: object
+      required:
+        - template_id
+        - template_name
+        - soap_template
+        - is_system_template
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        template_name:
+          type: string
+          maxLength: 200
+        template_description:
+          type: string
+        specialty:
+          type: string
+          enum: [general, internal_medicine, neurology, palliative_care]
+        soap_template:
+          type: object
+          description: JSONB field for SOAP template structure
+        is_system_template:
+          type: boolean
+          description: True for system-provided templates
+        usage_count:
+          type: integer
+          description: Number of times this template has been used
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+          format: uuid
+        deleted:
+          type: boolean
+        deleted_at:
+          type: string
+          format: date-time
+
 paths:
   /health:
     get:
@@ -946,6 +1077,514 @@ paths:
                 items:
                   $ref: '#/components/schemas/ACPRecord'
 
+  # Medical Records (Phase 1 Sprint 6 - Implemented)
+  /patients/{patient_id}/medical-records:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: List medical records
+      description: Get all medical records for a patient
+      tags:
+        - Medical Records
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, in_progress, completed, cancelled]
+        - name: visit_type
+          in: query
+          schema:
+            type: string
+            enum: [regular, emergency, initial, follow_up, terminal_care]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of medical records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+
+    post:
+      summary: Create medical record
+      description: Create a new medical record with SOAP notes
+      tags:
+        - Medical Records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - visit_started_at
+                - visit_type
+                - performed_by
+                - status
+                - source_type
+              properties:
+                visit_started_at:
+                  type: string
+                  format: date-time
+                visit_ended_at:
+                  type: string
+                  format: date-time
+                visit_type:
+                  type: string
+                  enum: [regular, emergency, initial, follow_up, terminal_care]
+                performed_by:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum: [draft, in_progress, completed, cancelled]
+                schedule_id:
+                  type: string
+                  format: uuid
+                soap_content:
+                  type: object
+                template_id:
+                  type: string
+                  format: uuid
+                source_record_id:
+                  type: string
+                  format: uuid
+                source_type:
+                  type: string
+                  enum: [manual, voice_to_text, ai_generated, template]
+                audio_file_url:
+                  type: string
+                  format: uri
+      responses:
+        '201':
+          description: Medical record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+
+  /patients/{patient_id}/medical-records/latest:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get latest medical records
+      description: Get the most recent medical records for a patient
+      tags:
+        - Medical Records
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Latest medical records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+
+  /patients/{patient_id}/medical-records/from-template:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Create medical record from template
+      description: Create a new medical record using a template
+      tags:
+        - Medical Records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - template_id
+                - visit_started_at
+                - visit_type
+                - performed_by
+              properties:
+                template_id:
+                  type: string
+                  format: uuid
+                visit_started_at:
+                  type: string
+                  format: date-time
+                visit_type:
+                  type: string
+                  enum: [regular, emergency, initial, follow_up, terminal_care]
+                performed_by:
+                  type: string
+                  format: uuid
+                initial_soap:
+                  type: object
+                  description: Initial SOAP values to merge with template
+      responses:
+        '201':
+          description: Medical record created from template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+
+  /patients/{patient_id}/medical-records/{id}:
+    parameters:
+      - name: patient_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get medical record by ID
+      description: Retrieve a specific medical record
+      tags:
+        - Medical Records
+      responses:
+        '200':
+          description: Medical record details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '404':
+          description: Medical record not found
+
+    put:
+      summary: Update medical record
+      description: Update an existing medical record with optimistic locking
+      tags:
+        - Medical Records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visit_ended_at:
+                  type: string
+                  format: date-time
+                visit_type:
+                  type: string
+                  enum: [regular, emergency, initial, follow_up, terminal_care]
+                status:
+                  type: string
+                  enum: [draft, in_progress, completed, cancelled]
+                soap_content:
+                  type: object
+                schedule_id:
+                  type: string
+                  format: uuid
+                template_id:
+                  type: string
+                  format: uuid
+                audio_file_url:
+                  type: string
+                  format: uri
+                expected_version:
+                  type: integer
+                  description: For optimistic locking
+      responses:
+        '200':
+          description: Medical record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '409':
+          description: Conflict - version mismatch (optimistic locking)
+
+    delete:
+      summary: Delete medical record
+      description: Soft delete a medical record (医師法24条準拠 - 5年保存義務)
+      tags:
+        - Medical Records
+      responses:
+        '204':
+          description: Medical record deleted (soft delete)
+
+  /medical-records/{record_id}/copy:
+    parameters:
+      - name: record_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Copy medical record
+      description: Create a copy of an existing medical record
+      tags:
+        - Medical Records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - visit_started_at
+                - visit_type
+                - performed_by
+              properties:
+                target_patient_id:
+                  type: string
+                  format: uuid
+                  description: Optional - if copying to different patient
+                visit_started_at:
+                  type: string
+                  format: date-time
+                visit_type:
+                  type: string
+                  enum: [regular, emergency, initial, follow_up, terminal_care]
+                performed_by:
+                  type: string
+                  format: uuid
+                modify_soap:
+                  type: object
+                  description: Partial modifications to apply to copied SOAP
+      responses:
+        '201':
+          description: Medical record copied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+
+  /medical-records/drafts:
+    get:
+      summary: Get my draft medical records
+      description: Get all draft medical records created by current user
+      tags:
+        - Medical Records
+      responses:
+        '200':
+          description: List of draft medical records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+
+  # Medical Record Templates (Phase 1 Sprint 6 - Implemented)
+  /medical-record-templates:
+    get:
+      summary: List medical record templates
+      description: Get all available medical record templates
+      tags:
+        - Medical Record Templates
+      parameters:
+        - name: specialty
+          in: query
+          schema:
+            type: string
+            enum: [general, internal_medicine, neurology, palliative_care]
+        - name: is_system_template
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecordTemplate'
+
+    post:
+      summary: Create medical record template
+      description: Create a new SOAP template
+      tags:
+        - Medical Record Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - template_name
+                - soap_template
+                - is_system_template
+              properties:
+                template_name:
+                  type: string
+                  maxLength: 200
+                template_description:
+                  type: string
+                specialty:
+                  type: string
+                  enum: [general, internal_medicine, neurology, palliative_care]
+                soap_template:
+                  type: object
+                is_system_template:
+                  type: boolean
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordTemplate'
+
+  /medical-record-templates/system:
+    get:
+      summary: Get system templates
+      description: Get all system-provided medical record templates
+      tags:
+        - Medical Record Templates
+      responses:
+        '200':
+          description: List of system templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecordTemplate'
+
+  /medical-record-templates/specialty/{specialty}:
+    parameters:
+      - name: specialty
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [general, internal_medicine, neurology, palliative_care]
+
+    get:
+      summary: Get templates by specialty
+      description: Get medical record templates for a specific specialty
+      tags:
+        - Medical Record Templates
+      responses:
+        '200':
+          description: List of templates for specialty
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecordTemplate'
+
+  /medical-record-templates/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get template by ID
+      description: Retrieve a specific medical record template
+      tags:
+        - Medical Record Templates
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordTemplate'
+        '404':
+          description: Template not found
+
+    put:
+      summary: Update template
+      description: Update an existing medical record template
+      tags:
+        - Medical Record Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                template_name:
+                  type: string
+                  maxLength: 200
+                template_description:
+                  type: string
+                specialty:
+                  type: string
+                  enum: [general, internal_medicine, neurology, palliative_care]
+                soap_template:
+                  type: object
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordTemplate'
+
+    delete:
+      summary: Delete template
+      description: Soft delete a medical record template
+      tags:
+        - Medical Record Templates
+      responses:
+        '204':
+          description: Template deleted (soft delete)
+
 tags:
   - name: Patients
     description: Patient management operations
@@ -959,3 +1598,7 @@ tags:
     description: Prescription and medication management
   - name: ACP Records
     description: Advance Care Planning records (DNAR/POLST)
+  - name: Medical Records
+    description: Medical records with SOAP notes (Phase 1 Sprint 6)
+  - name: Medical Record Templates
+    description: Reusable SOAP note templates (Phase 1 Sprint 6)

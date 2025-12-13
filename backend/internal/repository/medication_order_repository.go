@@ -81,19 +81,17 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 
 // GetByID retrieves a medication order by ID
 func (r *MedicationOrderRepository) GetByID(ctx context.Context, patientID, orderID string) (*models.MedicationOrder, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
 			dispense_pharmacy, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND order_id = @order_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"order_id":   orderID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -164,8 +162,10 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
@@ -174,10 +174,7 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 		%s
 		ORDER BY prescribed_date DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -377,8 +374,7 @@ func (r *MedicationOrderRepository) Delete(ctx context.Context, patientID, order
 
 // GetActiveOrders retrieves all active medication orders for a patient
 func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patientID string) ([]*models.MedicationOrder, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
@@ -386,10 +382,9 @@ func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patient
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY prescribed_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -416,8 +411,7 @@ func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patient
 
 // GetOrdersByPrescription retrieves medication orders by prescription details
 func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context, patientID, prescribedBy string, prescribedDate time.Time) ([]*models.MedicationOrder, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
 			medication, dosage_instruction,
 			prescribed_date, prescribed_by,
@@ -427,12 +421,11 @@ func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context,
 		  AND prescribed_by = @prescribed_by
 		  AND prescribed_date = @prescribed_date
 		ORDER BY order_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id":      patientID,
 			"prescribed_by":   prescribedBy,
 			"prescribed_date": prescribedDate,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

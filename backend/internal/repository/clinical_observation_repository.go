@@ -81,18 +81,16 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 
 // GetByID retrieves a clinical observation by ID
 func (r *ClinicalObservationRepository) GetByID(ctx context.Context, patientID, observationID string) (*models.ClinicalObservation, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			observation_id, patient_id, category, code,
 			effective_datetime, issued, value, interpretation,
 			performer_id, device_id, visit_record_id
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND observation_id = @observation_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id":     patientID,
 			"observation_id": observationID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -163,8 +161,10 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			observation_id, patient_id, category, code,
 			effective_datetime, issued, value, interpretation,
 			performer_id, device_id, visit_record_id
@@ -172,10 +172,7 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 		%s
 		ORDER BY effective_datetime DESC, issued DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -288,8 +285,7 @@ func (r *ClinicalObservationRepository) Delete(ctx context.Context, patientID, o
 
 // GetLatestByCategory retrieves the latest observation for a given category
 func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context, patientID, category string) (*models.ClinicalObservation, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			observation_id, patient_id, category, code,
 			effective_datetime, issued, value, interpretation,
 			performer_id, device_id, visit_record_id
@@ -297,11 +293,10 @@ func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context,
 		WHERE patient_id = @patient_id AND category = @category
 		ORDER BY effective_datetime DESC, issued DESC
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"category":   category,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -319,8 +314,7 @@ func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context,
 
 // GetTimeSeriesData retrieves time series observation data for trend analysis
 func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, patientID, category string, from, to time.Time) ([]*models.ClinicalObservation, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			observation_id, patient_id, category, code,
 			effective_datetime, issued, value, interpretation,
 			performer_id, device_id, visit_record_id
@@ -330,13 +324,12 @@ func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, p
 		  AND effective_datetime >= @from
 		  AND effective_datetime <= @to
 		ORDER BY effective_datetime ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"category":   category,
 			"from":       from,
 			"to":         to,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

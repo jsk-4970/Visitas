@@ -303,11 +303,10 @@ func (r *AuditRepository) GetFailedAccessLogs(ctx context.Context, limit, offset
 	}
 
 	// Get total count
-	countStmt := spanner.Statement{
-		SQL: `SELECT COUNT(*) as total
+	countStmt := NewStatement(`SELECT COUNT(*) as total
 		FROM audit_patient_access_logs
 		WHERE success = false`,
-	}
+		nil)
 
 	countIter := r.client.Single().Query(ctx, countStmt)
 	defer countIter.Stop()

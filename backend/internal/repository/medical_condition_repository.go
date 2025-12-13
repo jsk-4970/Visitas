@@ -71,8 +71,7 @@ func (r *MedicalConditionRepository) CreateCondition(ctx context.Context, req *m
 
 // GetConditionByID retrieves a medical condition by ID
 func (r *MedicalConditionRepository) GetConditionByID(ctx context.Context, conditionID string) (*models.MedicalCondition, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			condition_id, patient_id,
 			clinical_status, verification_status,
 			category, severity,
@@ -86,10 +85,9 @@ func (r *MedicalConditionRepository) GetConditionByID(ctx context.Context, condi
 			deleted, deleted_at
 		FROM medical_conditions
 		WHERE condition_id = @conditionID AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"conditionID": conditionID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -112,8 +110,7 @@ func (r *MedicalConditionRepository) GetConditionByID(ctx context.Context, condi
 
 // GetActiveConditions retrieves all active conditions for a patient
 func (r *MedicalConditionRepository) GetActiveConditions(ctx context.Context, patientID string) ([]*models.MedicalCondition, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			condition_id, patient_id,
 			clinical_status, verification_status,
 			category, severity,
@@ -130,10 +127,9 @@ func (r *MedicalConditionRepository) GetActiveConditions(ctx context.Context, pa
 			AND deleted = false
 			AND clinical_status IN ('active', 'recurrence', 'relapse')
 		ORDER BY recorded_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -161,8 +157,7 @@ func (r *MedicalConditionRepository) GetActiveConditions(ctx context.Context, pa
 
 // GetConditionsByPatient retrieves all conditions for a patient
 func (r *MedicalConditionRepository) GetConditionsByPatient(ctx context.Context, patientID string) ([]*models.MedicalCondition, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			condition_id, patient_id,
 			clinical_status, verification_status,
 			category, severity,
@@ -177,10 +172,9 @@ func (r *MedicalConditionRepository) GetConditionsByPatient(ctx context.Context,
 		FROM medical_conditions
 		WHERE patient_id = @patientID AND deleted = false
 		ORDER BY recorded_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

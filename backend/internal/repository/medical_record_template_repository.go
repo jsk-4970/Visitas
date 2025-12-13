@@ -85,18 +85,16 @@ func (r *MedicalRecordTemplateRepository) Create(ctx context.Context, req *model
 
 // GetByID retrieves a template by ID
 func (r *MedicalRecordTemplateRepository) GetByID(ctx context.Context, templateID string) (*models.MedicalRecordTemplate, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
 			soap_template, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
 		WHERE template_id = @template_id AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"template_id": templateID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -144,8 +142,10 @@ func (r *MedicalRecordTemplateRepository) List(ctx context.Context, filter *mode
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = int64(limit)
+	params["offset"] = int64(offset)
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			template_id, template_name, template_description, specialty,
 			soap_template, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
@@ -154,10 +154,7 @@ func (r *MedicalRecordTemplateRepository) List(ctx context.Context, filter *mode
 		%s
 		ORDER BY usage_count DESC, template_name ASC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = int64(limit)
-	stmt.Params["offset"] = int64(offset)
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -274,12 +271,10 @@ func (r *MedicalRecordTemplateRepository) Delete(ctx context.Context, templateID
 func (r *MedicalRecordTemplateRepository) IncrementUsageCount(ctx context.Context, templateID string) error {
 	_, err := r.spannerRepo.client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		// Read current usage count
-		stmt := spanner.Statement{
-			SQL: `SELECT usage_count FROM medical_record_templates WHERE template_id = @template_id`,
-			Params: map[string]interface{}{
+		stmt := NewStatement(`SELECT usage_count FROM medical_record_templates WHERE template_id = @template_id`,
+			map[string]interface{}{
 				"template_id": templateID,
-			},
-		}
+			})
 
 		iter := txn.Query(ctx, stmt)
 		defer iter.Stop()
@@ -315,8 +310,7 @@ func (r *MedicalRecordTemplateRepository) IncrementUsageCount(ctx context.Contex
 
 // GetSystemTemplates retrieves all system templates
 func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context) ([]*models.MedicalRecordTemplate, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
 			soap_template, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
@@ -324,7 +318,7 @@ func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context
 		FROM medical_record_templates
 		WHERE is_system_template = true AND deleted = false
 		ORDER BY specialty, template_name`,
-	}
+		nil)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -351,8 +345,7 @@ func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context
 
 // GetBySpecialty retrieves templates by specialty
 func (r *MedicalRecordTemplateRepository) GetBySpecialty(ctx context.Context, specialty string) ([]*models.MedicalRecordTemplate, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
 			soap_template, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
@@ -360,10 +353,9 @@ func (r *MedicalRecordTemplateRepository) GetBySpecialty(ctx context.Context, sp
 		FROM medical_record_templates
 		WHERE specialty = @specialty AND deleted = false
 		ORDER BY usage_count DESC, template_name ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"specialty": specialty,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

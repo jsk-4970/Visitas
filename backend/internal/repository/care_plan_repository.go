@@ -87,19 +87,17 @@ func (r *CarePlanRepository) Create(ctx context.Context, patientID string, req *
 
 // GetByID retrieves a care plan by ID
 func (r *CarePlanRepository) GetByID(ctx context.Context, patientID, planID string) (*models.CarePlan, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
 			goals, activities,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND plan_id = @plan_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"plan_id":    planID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -165,8 +163,10 @@ func (r *CarePlanRepository) List(ctx context.Context, filter *models.CarePlanFi
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
 			goals, activities,
@@ -175,10 +175,7 @@ func (r *CarePlanRepository) List(ctx context.Context, filter *models.CarePlanFi
 		%s
 		ORDER BY period_start DESC, created_at DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -384,8 +381,7 @@ func (r *CarePlanRepository) Delete(ctx context.Context, patientID, planID strin
 
 // GetActiveCarePlans retrieves active care plans for a patient
 func (r *CarePlanRepository) GetActiveCarePlans(ctx context.Context, patientID string) ([]*models.CarePlan, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
 			goals, activities,
@@ -393,10 +389,9 @@ func (r *CarePlanRepository) GetActiveCarePlans(ctx context.Context, patientID s
 		FROM care_plans
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY period_start DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

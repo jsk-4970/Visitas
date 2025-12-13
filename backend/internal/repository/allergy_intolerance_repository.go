@@ -82,8 +82,7 @@ func (r *AllergyIntoleranceRepository) CreateAllergy(ctx context.Context, req *m
 
 // GetAllergyByID retrieves an allergy intolerance by ID
 func (r *AllergyIntoleranceRepository) GetAllergyByID(ctx context.Context, allergyID string) (*models.AllergyIntolerance, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			allergy_id, patient_id,
 			clinical_status, verification_status,
 			type, category, criticality,
@@ -97,10 +96,9 @@ func (r *AllergyIntoleranceRepository) GetAllergyByID(ctx context.Context, aller
 			deleted, deleted_at
 		FROM allergy_intolerances
 		WHERE allergy_id = @allergyID AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"allergyID": allergyID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -123,8 +121,7 @@ func (r *AllergyIntoleranceRepository) GetAllergyByID(ctx context.Context, aller
 
 // GetActiveAllergies retrieves all active allergies for a patient
 func (r *AllergyIntoleranceRepository) GetActiveAllergies(ctx context.Context, patientID string) ([]*models.AllergyIntolerance, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			allergy_id, patient_id,
 			clinical_status, verification_status,
 			type, category, criticality,
@@ -141,10 +138,9 @@ func (r *AllergyIntoleranceRepository) GetActiveAllergies(ctx context.Context, p
 			AND deleted = false
 			AND clinical_status = 'active'
 		ORDER BY criticality DESC, recorded_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -172,8 +168,7 @@ func (r *AllergyIntoleranceRepository) GetActiveAllergies(ctx context.Context, p
 
 // GetMedicationAllergies retrieves all medication allergies for a patient
 func (r *AllergyIntoleranceRepository) GetMedicationAllergies(ctx context.Context, patientID string) ([]*models.AllergyIntolerance, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			allergy_id, patient_id,
 			clinical_status, verification_status,
 			type, category, criticality,
@@ -191,10 +186,9 @@ func (r *AllergyIntoleranceRepository) GetMedicationAllergies(ctx context.Contex
 			AND category = 'medication'
 			AND clinical_status = 'active'
 		ORDER BY criticality DESC, recorded_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -222,8 +216,7 @@ func (r *AllergyIntoleranceRepository) GetMedicationAllergies(ctx context.Contex
 
 // GetAllergiesByPatient retrieves all allergies for a patient
 func (r *AllergyIntoleranceRepository) GetAllergiesByPatient(ctx context.Context, patientID string) ([]*models.AllergyIntolerance, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			allergy_id, patient_id,
 			clinical_status, verification_status,
 			type, category, criticality,
@@ -238,10 +231,9 @@ func (r *AllergyIntoleranceRepository) GetAllergiesByPatient(ctx context.Context
 		FROM allergy_intolerances
 		WHERE patient_id = @patientID AND deleted = false
 		ORDER BY recorded_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

@@ -63,6 +63,7 @@ func (r *PatientRepository) CreatePatient(ctx context.Context, req *models.Patie
 		"name_history":         string(nameHistoryJSON),
 		"contact_points":       string(contactPointsJSON),
 		"addresses":            string(addressesJSON),
+		"consent_details":      nil, // Optional JSONB field for consent details
 		"consent_status":       req.ConsentStatus,
 		"consent_obtained_at":  req.ConsentObtainedAt,
 		"consent_withdrawn_at": nil,

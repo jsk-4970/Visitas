@@ -68,8 +68,7 @@ func (r *SocialProfileRepository) CreateSocialProfile(ctx context.Context, req *
 
 // GetSocialProfileByID retrieves a social profile by ID
 func (r *SocialProfileRepository) GetSocialProfileByID(ctx context.Context, profileID string) (*models.PatientSocialProfile, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			profile_id, patient_id, profile_version, content,
 			lives_alone, requires_caregiver_support,
 			valid_from, valid_to,
@@ -78,10 +77,9 @@ func (r *SocialProfileRepository) GetSocialProfileByID(ctx context.Context, prof
 			deleted, deleted_at
 		FROM patient_social_profiles
 		WHERE profile_id = @profileID AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"profileID": profileID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -106,8 +104,7 @@ func (r *SocialProfileRepository) GetSocialProfileByID(ctx context.Context, prof
 func (r *SocialProfileRepository) GetCurrentSocialProfile(ctx context.Context, patientID string) (*models.PatientSocialProfile, error) {
 	now := time.Now()
 
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			profile_id, patient_id, profile_version, content,
 			lives_alone, requires_caregiver_support,
 			valid_from, valid_to,
@@ -121,11 +118,10 @@ func (r *SocialProfileRepository) GetCurrentSocialProfile(ctx context.Context, p
 			AND (valid_to IS NULL OR valid_to > @now)
 		ORDER BY profile_version DESC
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
 			"now":       now,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -148,8 +144,7 @@ func (r *SocialProfileRepository) GetCurrentSocialProfile(ctx context.Context, p
 
 // GetSocialProfileHistory retrieves all social profiles for a patient
 func (r *SocialProfileRepository) GetSocialProfileHistory(ctx context.Context, patientID string) ([]*models.PatientSocialProfile, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			profile_id, patient_id, profile_version, content,
 			lives_alone, requires_caregiver_support,
 			valid_from, valid_to,
@@ -159,10 +154,9 @@ func (r *SocialProfileRepository) GetSocialProfileHistory(ctx context.Context, p
 		FROM patient_social_profiles
 		WHERE patient_id = @patientID AND deleted = false
 		ORDER BY profile_version DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

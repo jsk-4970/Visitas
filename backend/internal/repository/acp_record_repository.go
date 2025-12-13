@@ -114,8 +114,7 @@ func (r *ACPRecordRepository) Create(ctx context.Context, patientID string, req 
 
 // GetByID retrieves an ACP record by ID
 func (r *ACPRecordRepository) GetByID(ctx context.Context, patientID, acpID string) (*models.ACPRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
 			directives, values_narrative,
@@ -124,11 +123,10 @@ func (r *ACPRecordRepository) GetByID(ctx context.Context, patientID, acpID stri
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id AND acp_id = @acp_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"acp_id":     acpID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -189,8 +187,10 @@ func (r *ACPRecordRepository) List(ctx context.Context, filter *models.ACPRecord
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
 			directives, values_narrative,
@@ -201,10 +201,7 @@ func (r *ACPRecordRepository) List(ctx context.Context, filter *models.ACPRecord
 		%s
 		ORDER BY recorded_date DESC, version DESC, created_at DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -327,8 +324,7 @@ func (r *ACPRecordRepository) Delete(ctx context.Context, patientID, acpID strin
 
 // GetLatestACP retrieves the latest active ACP record for a patient
 func (r *ACPRecordRepository) GetLatestACP(ctx context.Context, patientID string) (*models.ACPRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
 			directives, values_narrative,
@@ -339,10 +335,9 @@ func (r *ACPRecordRepository) GetLatestACP(ctx context.Context, patientID string
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY version DESC, recorded_date DESC
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -360,8 +355,7 @@ func (r *ACPRecordRepository) GetLatestACP(ctx context.Context, patientID string
 
 // GetACPHistory retrieves the complete history of ACP records for a patient
 func (r *ACPRecordRepository) GetACPHistory(ctx context.Context, patientID string) ([]*models.ACPRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
 			directives, values_narrative,
@@ -371,10 +365,9 @@ func (r *ACPRecordRepository) GetACPHistory(ctx context.Context, patientID strin
 		FROM acp_records
 		WHERE patient_id = @patient_id
 		ORDER BY version DESC, recorded_date DESC, created_at DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

@@ -70,8 +70,7 @@ func (r *CoverageRepository) CreateCoverage(ctx context.Context, req *models.Pat
 
 // GetCoverageByID retrieves a coverage by ID
 func (r *CoverageRepository) GetCoverageByID(ctx context.Context, coverageID string) (*models.PatientCoverage, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			coverage_id, patient_id, insurance_type, details,
 			care_level_code, copay_rate,
 			valid_from, valid_to,
@@ -81,10 +80,9 @@ func (r *CoverageRepository) GetCoverageByID(ctx context.Context, coverageID str
 			deleted, deleted_at
 		FROM patient_coverages
 		WHERE coverage_id = @coverageID AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"coverageID": coverageID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -109,8 +107,7 @@ func (r *CoverageRepository) GetCoverageByID(ctx context.Context, coverageID str
 func (r *CoverageRepository) GetActiveCoverages(ctx context.Context, patientID string) ([]*models.PatientCoverage, error) {
 	now := time.Now()
 
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			coverage_id, patient_id, insurance_type, details,
 			care_level_code, copay_rate,
 			valid_from, valid_to,
@@ -125,11 +122,10 @@ func (r *CoverageRepository) GetActiveCoverages(ctx context.Context, patientID s
 			AND valid_from <= @now
 			AND (valid_to IS NULL OR valid_to > @now)
 		ORDER BY priority ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
 			"now":       now,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -157,8 +153,7 @@ func (r *CoverageRepository) GetActiveCoverages(ctx context.Context, patientID s
 
 // GetCoveragesByPatient retrieves all coverages for a patient (including expired)
 func (r *CoverageRepository) GetCoveragesByPatient(ctx context.Context, patientID string) ([]*models.PatientCoverage, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			coverage_id, patient_id, insurance_type, details,
 			care_level_code, copay_rate,
 			valid_from, valid_to,
@@ -169,10 +164,9 @@ func (r *CoverageRepository) GetCoveragesByPatient(ctx context.Context, patientI
 		FROM patient_coverages
 		WHERE patient_id = @patientID AND deleted = false
 		ORDER BY priority ASC, created_at DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -271,8 +265,7 @@ func (r *CoverageRepository) DeleteCoverage(ctx context.Context, coverageID, del
 
 // GetCoveragesByPatientAndType retrieves coverages filtered by insurance type
 func (r *CoverageRepository) GetCoveragesByPatientAndType(ctx context.Context, patientID, insuranceType string) ([]*models.PatientCoverage, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			coverage_id, patient_id, insurance_type, details,
 			care_level_code, copay_rate,
 			valid_from, valid_to,
@@ -285,11 +278,10 @@ func (r *CoverageRepository) GetCoveragesByPatientAndType(ctx context.Context, p
 			AND insurance_type = @insuranceType
 			AND deleted = false
 		ORDER BY priority ASC, created_at DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID":     patientID,
 			"insuranceType": insuranceType,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

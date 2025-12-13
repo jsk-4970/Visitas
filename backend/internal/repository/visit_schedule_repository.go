@@ -98,8 +98,7 @@ func (r *VisitScheduleRepository) Create(ctx context.Context, patientID string, 
 
 // GetByID retrieves a visit schedule by ID
 func (r *VisitScheduleRepository) GetByID(ctx context.Context, patientID, scheduleID string) (*models.VisitSchedule, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			schedule_id, patient_id, visit_date, visit_type,
 			time_window_start, time_window_end, estimated_duration_minutes,
 			assigned_staff_id, assigned_vehicle_id,
@@ -108,11 +107,10 @@ func (r *VisitScheduleRepository) GetByID(ctx context.Context, patientID, schedu
 			created_at, updated_at
 		FROM visit_schedules
 		WHERE patient_id = @patient_id AND schedule_id = @schedule_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id":  patientID,
 			"schedule_id": scheduleID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -188,8 +186,10 @@ func (r *VisitScheduleRepository) List(ctx context.Context, filter *models.Visit
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			schedule_id, patient_id, visit_date, visit_type,
 			time_window_start, time_window_end, estimated_duration_minutes,
 			assigned_staff_id, assigned_vehicle_id,
@@ -200,10 +200,7 @@ func (r *VisitScheduleRepository) List(ctx context.Context, filter *models.Visit
 		%s
 		ORDER BY visit_date DESC, created_at DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -347,8 +344,7 @@ func (r *VisitScheduleRepository) GetUpcomingSchedules(ctx context.Context, pati
 	now := time.Now()
 	endDate := now.AddDate(0, 0, days)
 
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			schedule_id, patient_id, visit_date, visit_type,
 			time_window_start, time_window_end, estimated_duration_minutes,
 			assigned_staff_id, assigned_vehicle_id,
@@ -361,12 +357,11 @@ func (r *VisitScheduleRepository) GetUpcomingSchedules(ctx context.Context, pati
 		  AND visit_date <= @end_date
 		  AND status NOT IN ('cancelled', 'completed')
 		ORDER BY visit_date ASC, time_window_start ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"now":        now,
 			"end_date":   endDate,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
