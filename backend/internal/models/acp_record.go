@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // ACPRecord represents an Advance Care Planning record for end-of-life care decision support
@@ -16,11 +17,11 @@ type ACPRecord struct {
 
 	// Decision maker
 	DecisionMaker  string         `json:"decision_maker"` // "patient" | "proxy" | "guardian"
-	ProxyPersonID  sql.NullString `json:"proxy_person_id,omitempty"`
+	ProxyPersonID  spanner.NullString `json:"proxy_person_id,omitempty"`
 
 	// ACP content
 	Directives       json.RawMessage `json:"directives"`          // JSONB - Specific directives (DNAR, ventilator, etc.)
-	ValuesNarrative  sql.NullString  `json:"values_narrative,omitempty"` // Value description
+	ValuesNarrative  spanner.NullString  `json:"values_narrative,omitempty"` // Value description
 
 	// Legal documents
 	LegalDocuments   json.RawMessage `json:"legal_documents,omitempty"`  // JSONB - Links to consent forms, living wills, etc.

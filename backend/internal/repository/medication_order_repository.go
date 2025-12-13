@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -44,16 +43,16 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 	}
 
 	if req.ReasonReference != nil {
-		order.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+		order.ReasonReference = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
 	}
 
 	// Convert JSONB fields to strings for Spanner
 	medicationStr := string(req.Medication)
 	dosageInstructionStr := string(req.DosageInstruction)
 
-	var dispensePharmacyStr sql.NullString
+	var dispensePharmacyStr spanner.NullString
 	if len(req.DispensePharmacy) > 0 {
-		dispensePharmacyStr = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		dispensePharmacyStr = spanner.NullString{StringVal: string(req.DispensePharmacy), Valid: true}
 	}
 
 	mutation := spanner.Insert("medication_orders",
@@ -241,13 +240,13 @@ func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, order
 	}
 
 	if len(req.DispensePharmacy) > 0 {
-		updates["dispense_pharmacy"] = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		updates["dispense_pharmacy"] = spanner.NullString{StringVal: string(req.DispensePharmacy), Valid: true}
 		existing.DispensePharmacy = req.DispensePharmacy
 	}
 
 	if req.ReasonReference != nil {
-		updates["reason_reference"] = sql.NullString{String: *req.ReasonReference, Valid: true}
-		existing.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+		updates["reason_reference"] = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
+		existing.ReasonReference = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
 	}
 
 	if len(updates) == 0 {
@@ -324,13 +323,13 @@ func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patie
 	}
 
 	if len(req.DispensePharmacy) > 0 {
-		updates["dispense_pharmacy"] = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		updates["dispense_pharmacy"] = spanner.NullString{StringVal: string(req.DispensePharmacy), Valid: true}
 		existing.DispensePharmacy = req.DispensePharmacy
 	}
 
 	if req.ReasonReference != nil {
-		updates["reason_reference"] = sql.NullString{String: *req.ReasonReference, Valid: true}
-		existing.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+		updates["reason_reference"] = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
+		existing.ReasonReference = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
 	}
 
 	if len(updates) == 0 {
@@ -454,7 +453,7 @@ func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context,
 func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 	var order models.MedicationOrder
 	var medicationStr, dosageInstructionStr string
-	var dispensePharmacyStr sql.NullString
+	var dispensePharmacyStr spanner.NullString
 
 	err := row.Columns(
 		&order.OrderID,
@@ -477,7 +476,7 @@ func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 	order.Medication = json.RawMessage(medicationStr)
 	order.DosageInstruction = json.RawMessage(dosageInstructionStr)
 	if dispensePharmacyStr.Valid {
-		order.DispensePharmacy = json.RawMessage(dispensePharmacyStr.String)
+		order.DispensePharmacy = json.RawMessage(dispensePharmacyStr.StringVal)
 	}
 
 	return &order, nil

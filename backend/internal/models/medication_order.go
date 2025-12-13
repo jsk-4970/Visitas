@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // MedicationOrder represents a medication order for a patient
@@ -26,7 +27,7 @@ type MedicationOrder struct {
 	DispensePharmacy   json.RawMessage `json:"dispense_pharmacy,omitempty"`
 
 	// Prescription reason (reference to condition ID)
-	ReasonReference    sql.NullString  `json:"reason_reference,omitempty"`
+	ReasonReference    spanner.NullString  `json:"reason_reference,omitempty"`
 
 	// Optimistic Locking
 	Version int `json:"version"`

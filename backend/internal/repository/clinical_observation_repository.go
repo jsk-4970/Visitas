@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -42,21 +41,21 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 	}
 
 	if req.Interpretation != nil {
-		observation.Interpretation = sql.NullString{String: *req.Interpretation, Valid: true}
+		observation.Interpretation = spanner.NullString{StringVal: *req.Interpretation, Valid: true}
 	}
 	if req.PerformerID != nil {
-		observation.PerformerID = sql.NullString{String: *req.PerformerID, Valid: true}
+		observation.PerformerID = spanner.NullString{StringVal: *req.PerformerID, Valid: true}
 	}
 	if req.DeviceID != nil {
-		observation.DeviceID = sql.NullString{String: *req.DeviceID, Valid: true}
+		observation.DeviceID = spanner.NullString{StringVal: *req.DeviceID, Valid: true}
 	}
 	if req.VisitRecordID != nil {
-		observation.VisitRecordID = sql.NullString{String: *req.VisitRecordID, Valid: true}
+		observation.VisitRecordID = spanner.NullString{StringVal: *req.VisitRecordID, Valid: true}
 	}
 
 	// Convert JSONB fields to strings for Spanner
-	codeStr := sql.NullString{String: string(req.Code), Valid: true}
-	valueStr := sql.NullString{String: string(req.Value), Valid: true}
+	codeStr := spanner.NullString{StringVal: string(req.Code), Valid: true}
+	valueStr := spanner.NullString{StringVal: string(req.Value), Valid: true}
 
 	mutation := spanner.Insert("clinical_observations",
 		[]string{
@@ -214,7 +213,7 @@ func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, o
 	}
 
 	if len(req.Code) > 0 {
-		updates["code"] = sql.NullString{String: string(req.Code), Valid: true}
+		updates["code"] = spanner.NullString{StringVal: string(req.Code), Valid: true}
 		existing.Code = req.Code
 	}
 
@@ -224,28 +223,28 @@ func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, o
 	}
 
 	if len(req.Value) > 0 {
-		updates["value"] = sql.NullString{String: string(req.Value), Valid: true}
+		updates["value"] = spanner.NullString{StringVal: string(req.Value), Valid: true}
 		existing.Value = req.Value
 	}
 
 	if req.Interpretation != nil {
-		updates["interpretation"] = sql.NullString{String: *req.Interpretation, Valid: true}
-		existing.Interpretation = sql.NullString{String: *req.Interpretation, Valid: true}
+		updates["interpretation"] = spanner.NullString{StringVal: *req.Interpretation, Valid: true}
+		existing.Interpretation = spanner.NullString{StringVal: *req.Interpretation, Valid: true}
 	}
 
 	if req.PerformerID != nil {
-		updates["performer_id"] = sql.NullString{String: *req.PerformerID, Valid: true}
-		existing.PerformerID = sql.NullString{String: *req.PerformerID, Valid: true}
+		updates["performer_id"] = spanner.NullString{StringVal: *req.PerformerID, Valid: true}
+		existing.PerformerID = spanner.NullString{StringVal: *req.PerformerID, Valid: true}
 	}
 
 	if req.DeviceID != nil {
-		updates["device_id"] = sql.NullString{String: *req.DeviceID, Valid: true}
-		existing.DeviceID = sql.NullString{String: *req.DeviceID, Valid: true}
+		updates["device_id"] = spanner.NullString{StringVal: *req.DeviceID, Valid: true}
+		existing.DeviceID = spanner.NullString{StringVal: *req.DeviceID, Valid: true}
 	}
 
 	if req.VisitRecordID != nil {
-		updates["visit_record_id"] = sql.NullString{String: *req.VisitRecordID, Valid: true}
-		existing.VisitRecordID = sql.NullString{String: *req.VisitRecordID, Valid: true}
+		updates["visit_record_id"] = spanner.NullString{StringVal: *req.VisitRecordID, Valid: true}
+		existing.VisitRecordID = spanner.NullString{StringVal: *req.VisitRecordID, Valid: true}
 	}
 
 	if len(updates) == 0 {
@@ -357,7 +356,7 @@ func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, p
 // scanClinicalObservation scans a Spanner row into a ClinicalObservation model
 func scanClinicalObservation(row *spanner.Row) (*models.ClinicalObservation, error) {
 	var observation models.ClinicalObservation
-	var codeStr, valueStr sql.NullString
+	var codeStr, valueStr spanner.NullString
 
 	err := row.Columns(
 		&observation.ObservationID,
@@ -378,10 +377,10 @@ func scanClinicalObservation(row *spanner.Row) (*models.ClinicalObservation, err
 
 	// Convert JSONB strings back to json.RawMessage
 	if codeStr.Valid {
-		observation.Code = json.RawMessage(codeStr.String)
+		observation.Code = json.RawMessage(codeStr.StringVal)
 	}
 	if valueStr.Valid {
-		observation.Value = json.RawMessage(valueStr.String)
+		observation.Value = json.RawMessage(valueStr.StringVal)
 	}
 
 	return &observation, nil

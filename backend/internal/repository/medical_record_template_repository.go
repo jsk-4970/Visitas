@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -50,17 +49,17 @@ func (r *MedicalRecordTemplateRepository) Create(ctx context.Context, req *model
 	}
 	template.SOAPTemplate = req.SOAPTemplate
 
-	// Convert optional fields to sql.Null types
-	var description, specialty sql.NullString
+	// Convert optional fields to spanner.Null types
+	var description, specialty spanner.NullString
 	if req.TemplateDescription != nil {
-		description = sql.NullString{String: *req.TemplateDescription, Valid: true}
+		description = spanner.NullString{StringVal: *req.TemplateDescription, Valid: true}
 	}
 	if req.Specialty != nil {
-		specialty = sql.NullString{String: *req.Specialty, Valid: true}
+		specialty = spanner.NullString{StringVal: *req.Specialty, Valid: true}
 	}
 
 	// Convert JSONB to string
-	soapTemplateStr := sql.NullString{String: string(req.SOAPTemplate), Valid: true}
+	soapTemplateStr := spanner.NullString{StringVal: string(req.SOAPTemplate), Valid: true}
 
 	mutation := spanner.Insert("medical_record_templates",
 		[]string{
@@ -196,17 +195,17 @@ func (r *MedicalRecordTemplateRepository) Update(ctx context.Context, templateID
 	}
 
 	if req.TemplateDescription != nil {
-		updates["template_description"] = sql.NullString{String: *req.TemplateDescription, Valid: true}
+		updates["template_description"] = spanner.NullString{StringVal: *req.TemplateDescription, Valid: true}
 		existing.TemplateDescription = req.TemplateDescription
 	}
 
 	if req.Specialty != nil {
-		updates["specialty"] = sql.NullString{String: *req.Specialty, Valid: true}
+		updates["specialty"] = spanner.NullString{StringVal: *req.Specialty, Valid: true}
 		existing.Specialty = req.Specialty
 	}
 
 	if len(req.SOAPTemplate) > 0 {
-		updates["soap_template"] = sql.NullString{String: string(req.SOAPTemplate), Valid: true}
+		updates["soap_template"] = spanner.NullString{StringVal: string(req.SOAPTemplate), Valid: true}
 		existing.SOAPTemplate = req.SOAPTemplate
 	}
 
@@ -217,7 +216,7 @@ func (r *MedicalRecordTemplateRepository) Update(ctx context.Context, templateID
 	// Update audit fields
 	now := time.Now()
 	updates["updated_at"] = now
-	updates["updated_by"] = sql.NullString{String: updatedBy, Valid: true}
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
 	existing.UpdatedAt = now
 	existing.UpdatedBy = &updatedBy
 
@@ -254,7 +253,7 @@ func (r *MedicalRecordTemplateRepository) Delete(ctx context.Context, templateID
 		[]interface{}{
 			templateID,
 			true,
-			sql.NullTime{Time: now, Valid: true},
+			spanner.NullTime{Time: now, Valid: true},
 			now,
 		},
 	)
@@ -385,10 +384,10 @@ func scanTemplate(row *spanner.Row) (*models.MedicalRecordTemplate, error) {
 	var template models.MedicalRecordTemplate
 
 	// Nullable fields
-	var description, specialty sql.NullString
-	var soapTemplateStr sql.NullString
-	var updatedBy sql.NullString
-	var deletedAt sql.NullTime
+	var description, specialty spanner.NullString
+	var soapTemplateStr spanner.NullString
+	var updatedBy spanner.NullString
+	var deletedAt spanner.NullTime
 
 	err := row.Columns(
 		&template.TemplateID,
@@ -411,16 +410,16 @@ func scanTemplate(row *spanner.Row) (*models.MedicalRecordTemplate, error) {
 
 	// Convert nullable fields
 	if description.Valid {
-		template.TemplateDescription = &description.String
+		template.TemplateDescription = &description.StringVal
 	}
 	if specialty.Valid {
-		template.Specialty = &specialty.String
+		template.Specialty = &specialty.StringVal
 	}
 	if soapTemplateStr.Valid {
-		template.SOAPTemplate = json.RawMessage(soapTemplateStr.String)
+		template.SOAPTemplate = json.RawMessage(soapTemplateStr.StringVal)
 	}
 	if updatedBy.Valid {
-		template.UpdatedBy = &updatedBy.String
+		template.UpdatedBy = &updatedBy.StringVal
 	}
 	if deletedAt.Valid {
 		template.DeletedAt = &deletedAt.Time

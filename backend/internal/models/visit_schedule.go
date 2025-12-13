@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // VisitSchedule represents a visit schedule for home healthcare
@@ -14,13 +15,13 @@ type VisitSchedule struct {
 	VisitType    string    `json:"visit_type"` // "regular" | "emergency" | "initial_assessment" | "terminal_care"
 
 	// Visit time window
-	TimeWindowStart        sql.NullTime `json:"time_window_start,omitempty"`
-	TimeWindowEnd          sql.NullTime `json:"time_window_end,omitempty"`
+	TimeWindowStart        spanner.NullTime `json:"time_window_start,omitempty"`
+	TimeWindowEnd          spanner.NullTime `json:"time_window_end,omitempty"`
 	EstimatedDurationMinutes int        `json:"estimated_duration_minutes"`
 
 	// Staff assignment
-	AssignedStaffID   sql.NullString `json:"assigned_staff_id,omitempty"`
-	AssignedVehicleID sql.NullString `json:"assigned_vehicle_id,omitempty"`
+	AssignedStaffID   spanner.NullString `json:"assigned_staff_id,omitempty"`
+	AssignedVehicleID spanner.NullString `json:"assigned_vehicle_id,omitempty"`
 
 	// Status
 	Status string `json:"status"` // "draft" | "optimized" | "assigned" | "in_progress" | "completed" | "cancelled"
@@ -31,8 +32,8 @@ type VisitSchedule struct {
 	OptimizationResult  json.RawMessage `json:"optimization_result,omitempty"` // JSONB - API Response
 
 	// Link to care plan
-	CarePlanRef  sql.NullString `json:"care_plan_ref,omitempty"`
-	ActivityRef  sql.NullString `json:"activity_ref,omitempty"`
+	CarePlanRef  spanner.NullString `json:"care_plan_ref,omitempty"`
+	ActivityRef  spanner.NullString `json:"activity_ref,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
