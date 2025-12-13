@@ -38,7 +38,7 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
 
       - name: Run golangci-lint
         run: golangci-lint run --timeout=5m
@@ -63,8 +63,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Run unit tests (skip integration tests)
+        run: |
+          # Run tests excluding integration tests (which require Spanner Emulator)
+          go test -v -race -coverprofile=coverage.out -covermode=atomic \
+            $(go list ./... | grep -v /tests/integration)
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

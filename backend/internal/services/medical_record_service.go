@@ -93,6 +93,18 @@ func (s *MedicalRecordService) CreateRecord(ctx context.Context, patientID strin
 		return nil, fmt.Errorf("invalid source type: %s", req.SourceType)
 	}
 
+	// Validate visit_started_at is not zero
+	if req.VisitStartedAt.IsZero() {
+		logger.WarnContext(ctx, "Missing visit_started_at", nil)
+		return nil, fmt.Errorf("visit_started_at is required")
+	}
+
+	// Validate performed_by is not empty
+	if req.PerformedBy == "" {
+		logger.WarnContext(ctx, "Missing performed_by", nil)
+		return nil, fmt.Errorf("performed_by is required")
+	}
+
 	// Create record
 	record, err := s.medicalRecordRepo.Create(ctx, patientID, req, createdBy)
 	if err != nil {

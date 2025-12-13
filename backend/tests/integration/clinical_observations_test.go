@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func TestClinicalObservation_Integration_CreateAndGet(t *testing.T) {
 		assert.NotEmpty(t, observation.ObservationID)
 		assert.Equal(t, patientID, observation.PatientID)
 		assert.Equal(t, "vital_signs", observation.Category)
-		assert.Equal(t, "normal", observation.Interpretation.String)
+		assert.Equal(t, "normal", observation.Interpretation.StringVal)
 
 		// Test: Get the created observation
 		t.Run("Get observation by ID", func(t *testing.T) {
@@ -268,7 +269,7 @@ func TestClinicalObservation_Integration_Update(t *testing.T) {
 		DecodeJSONResponse(t, updateResp, &updatedObservation)
 
 		assert.Equal(t, observation.ObservationID, updatedObservation.ObservationID)
-		assert.Equal(t, "high", updatedObservation.Interpretation.String)
+		assert.Equal(t, "high", updatedObservation.Interpretation.StringVal)
 
 		// Verify updated value
 		var retrievedValue models.QuantityValue
@@ -454,7 +455,9 @@ func TestClinicalObservation_Integration_GetTimeSeriesData(t *testing.T) {
 
 	// Test: Get time series data
 	t.Run("Get time series data", func(t *testing.T) {
-		timeSeriesResp := ts.MakeRequest(t, http.MethodGet, fmt.Sprintf("/api/v1/patients/%s/observations/timeseries/vital_signs", patientID), nil)
+		from := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+		to := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+		timeSeriesResp := ts.MakeRequest(t, http.MethodGet, fmt.Sprintf("/api/v1/patients/%s/observations/timeseries/vital_signs?from=%s&to=%s", patientID, url.QueryEscape(from), url.QueryEscape(to)), nil)
 		assert.Equal(t, http.StatusOK, timeSeriesResp.StatusCode)
 
 		var timeSeriesData []models.ClinicalObservation
@@ -514,7 +517,7 @@ func TestClinicalObservation_Integration_Delete(t *testing.T) {
 	// Test: Delete the observation
 	t.Run("Delete observation", func(t *testing.T) {
 		deleteResp := ts.MakeRequest(t, http.MethodDelete, fmt.Sprintf("/api/v1/patients/%s/observations/%s", patientID, observation.ObservationID), nil)
-		assert.Equal(t, http.StatusOK, deleteResp.StatusCode)
+		assert.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
 
 		// Verify the observation is deleted (should return 404)
 		getResp := ts.MakeRequest(t, http.MethodGet, fmt.Sprintf("/api/v1/patients/%s/observations/%s", patientID, observation.ObservationID), nil)

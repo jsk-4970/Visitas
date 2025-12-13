@@ -1,10 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"testing"
 	"time"
 
+	"cloud.google.com/go/spanner"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,43 +54,43 @@ func TestPatientIdentifier_IsActive(t *testing.T) {
 	tests := []struct {
 		name      string
 		deleted   bool
-		validFrom sql.NullTime
-		validTo   sql.NullTime
+		validFrom spanner.NullTime
+		validTo   spanner.NullTime
 		expected  bool
 	}{
 		{
 			name:      "Active identifier with no validity period",
 			deleted:   false,
-			validFrom: sql.NullTime{Valid: false},
-			validTo:   sql.NullTime{Valid: false},
+			validFrom: spanner.NullTime{Valid: false},
+			validTo:   spanner.NullTime{Valid: false},
 			expected:  true,
 		},
 		{
 			name:      "Active identifier within validity period",
 			deleted:   false,
-			validFrom: sql.NullTime{Time: yesterday, Valid: true},
-			validTo:   sql.NullTime{Time: tomorrow, Valid: true},
+			validFrom: spanner.NullTime{Time: yesterday, Valid: true},
+			validTo:   spanner.NullTime{Time: tomorrow, Valid: true},
 			expected:  true,
 		},
 		{
 			name:      "Deleted identifier",
 			deleted:   true,
-			validFrom: sql.NullTime{Valid: false},
-			validTo:   sql.NullTime{Valid: false},
+			validFrom: spanner.NullTime{Valid: false},
+			validTo:   spanner.NullTime{Valid: false},
 			expected:  false,
 		},
 		{
 			name:      "Identifier not yet valid",
 			deleted:   false,
-			validFrom: sql.NullTime{Time: tomorrow, Valid: true},
-			validTo:   sql.NullTime{Valid: false},
+			validFrom: spanner.NullTime{Time: tomorrow, Valid: true},
+			validTo:   spanner.NullTime{Valid: false},
 			expected:  false,
 		},
 		{
 			name:      "Expired identifier",
 			deleted:   false,
-			validFrom: sql.NullTime{Valid: false},
-			validTo:   sql.NullTime{Time: yesterday, Valid: true},
+			validFrom: spanner.NullTime{Valid: false},
+			validTo:   spanner.NullTime{Time: yesterday, Valid: true},
 			expected:  false,
 		},
 	}

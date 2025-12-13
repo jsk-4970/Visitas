@@ -1,8 +1,9 @@
 package models
 
 import (
-	"database/sql"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // IdentifierType represents the type of patient identifier
@@ -39,17 +40,17 @@ type PatientIdentifier struct {
 	IsPrimary bool `json:"is_primary" spanner:"is_primary"`
 
 	// Validity Period
-	ValidFrom sql.NullTime `json:"valid_from,omitempty" spanner:"valid_from"`
-	ValidTo   sql.NullTime `json:"valid_to,omitempty" spanner:"valid_to"`
+	ValidFrom spanner.NullTime `json:"valid_from,omitempty" spanner:"valid_from"`
+	ValidTo   spanner.NullTime `json:"valid_to,omitempty" spanner:"valid_to"`
 
 	// Issuer Information (for insurance cards)
 	IssuerName string `json:"issuer_name,omitempty" spanner:"issuer_name"`
 	IssuerCode string `json:"issuer_code,omitempty" spanner:"issuer_code"`
 
 	// Verification Status
-	VerificationStatus string       `json:"verification_status" spanner:"verification_status"`
-	VerifiedAt         sql.NullTime `json:"verified_at,omitempty" spanner:"verified_at"`
-	VerifiedBy         string       `json:"verified_by,omitempty" spanner:"verified_by"`
+	VerificationStatus string           `json:"verification_status" spanner:"verification_status"`
+	VerifiedAt         spanner.NullTime `json:"verified_at,omitempty" spanner:"verified_at"`
+	VerifiedBy         string           `json:"verified_by,omitempty" spanner:"verified_by"`
 
 	// Audit Timestamps
 	CreatedAt time.Time `json:"created_at" spanner:"created_at"`
@@ -58,8 +59,8 @@ type PatientIdentifier struct {
 	UpdatedBy string    `json:"updated_by,omitempty" spanner:"updated_by"`
 
 	// Soft Delete
-	Deleted   bool         `json:"deleted" spanner:"deleted"`
-	DeletedAt sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
+	Deleted   bool             `json:"deleted" spanner:"deleted"`
+	DeletedAt spanner.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
 }
 
 // PatientIdentifierCreateRequest represents the request to add a new identifier

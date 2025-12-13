@@ -76,9 +76,18 @@ func (s *VisitScheduleService) CreateVisitSchedule(ctx context.Context, patientI
 		return nil, fmt.Errorf("invalid status: %s", req.Status)
 	}
 
+	// Validate visit_date is not zero
+	if req.VisitDate.IsZero() {
+		logger.WarnContext(ctx, "Missing visit_date", nil)
+		return nil, fmt.Errorf("visit_date is required")
+	}
+
 	// Validate priority score
 	if req.PriorityScore < 1 || req.PriorityScore > 10 {
-		req.PriorityScore = 5 // Default
+		logger.WarnContext(ctx, "Invalid priority score", map[string]interface{}{
+			"priority_score": req.PriorityScore,
+		})
+		return nil, fmt.Errorf("invalid priority score: must be between 1 and 10")
 	}
 
 	// Validate estimated duration

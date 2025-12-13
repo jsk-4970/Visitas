@@ -46,6 +46,12 @@ func (s *ACPRecordService) CreateACPRecord(ctx context.Context, patientID string
 		return nil, fmt.Errorf("access denied: you do not have permission to create ACP records for this patient")
 	}
 
+	// Validate recorded_date is not zero
+	if req.RecordedDate.IsZero() {
+		logger.WarnContext(ctx, "Missing recorded_date", nil)
+		return nil, fmt.Errorf("recorded_date is required")
+	}
+
 	// Validate status
 	validStatuses := map[string]bool{
 		"draft":      true,

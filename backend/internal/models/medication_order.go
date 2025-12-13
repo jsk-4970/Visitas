@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // MedicationOrder represents a medication order for a patient
@@ -26,10 +27,16 @@ type MedicationOrder struct {
 	DispensePharmacy   json.RawMessage `json:"dispense_pharmacy,omitempty"`
 
 	// Prescription reason (reference to condition ID)
-	ReasonReference    sql.NullString  `json:"reason_reference,omitempty"`
+	ReasonReference    spanner.NullString  `json:"reason_reference,omitempty"`
 
 	// Optimistic Locking
-	Version int `json:"version"`
+	Version int64 `json:"version"`
+
+	// Audit fields for medical compliance (3省2ガイドライン)
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy spanner.NullString `json:"created_by,omitempty"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	UpdatedBy spanner.NullString `json:"updated_by,omitempty"`
 }
 
 // MedicationOrderCreateRequest represents the request body for creating a medication order
@@ -55,7 +62,7 @@ type MedicationOrderUpdateRequest struct {
 	DispensePharmacy   json.RawMessage `json:"dispense_pharmacy,omitempty"`
 	ReasonReference    *string         `json:"reason_reference,omitempty"`
 
-	ExpectedVersion    *int            `json:"expected_version,omitempty"` // Optimistic locking
+	ExpectedVersion    *int64          `json:"expected_version,omitempty"` // Optimistic locking
 }
 
 // MedicationOrderFilter represents filter options for listing medication orders

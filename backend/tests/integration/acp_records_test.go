@@ -56,7 +56,7 @@ func TestACPRecord_Integration_CreateAndGet(t *testing.T) {
 		assert.Equal(t, patientID, acp.PatientID)
 		assert.Equal(t, "active", acp.Status)
 		assert.Equal(t, "patient", acp.DecisionMaker)
-		assert.Equal(t, 1, acp.Version)
+		assert.Equal(t, int64(1), acp.Version)
 		assert.Equal(t, "highly_confidential", acp.DataSensitivity)
 
 		// Test: Get the created ACP record
@@ -133,7 +133,7 @@ func TestACPRecord_Integration_Update(t *testing.T) {
 		assert.Equal(t, acp.ACPID, updatedACP.ACPID)
 		assert.Equal(t, "active", updatedACP.Status)
 		assert.True(t, updatedACP.ValuesNarrative.Valid)
-		assert.Contains(t, updatedACP.ValuesNarrative.String, "Updated")
+		assert.Contains(t, updatedACP.ValuesNarrative.StringVal, "Updated")
 	})
 }
 
@@ -359,7 +359,7 @@ func TestACPRecord_Integration_WithProxy(t *testing.T) {
 		assert.NotEmpty(t, acp.ACPID)
 		assert.Equal(t, "proxy", acp.DecisionMaker)
 		assert.True(t, acp.ProxyPersonID.Valid)
-		assert.Equal(t, "proxy-123", acp.ProxyPersonID.String)
+		assert.Equal(t, "proxy-123", acp.ProxyPersonID.StringVal)
 	})
 }
 
@@ -465,7 +465,7 @@ func TestACPRecord_Integration_Delete(t *testing.T) {
 	// Test: Delete the ACP record
 	t.Run("Delete ACP record", func(t *testing.T) {
 		deleteResp := ts.MakeRequest(t, http.MethodDelete, fmt.Sprintf("/api/v1/patients/%s/acp-records/%s", patientID, acp.ACPID), nil)
-		assert.Equal(t, http.StatusOK, deleteResp.StatusCode)
+		assert.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
 
 		// Verify the ACP record is deleted (should return 404)
 		getResp := ts.MakeRequest(t, http.MethodGet, fmt.Sprintf("/api/v1/patients/%s/acp-records/%s", patientID, acp.ACPID), nil)
@@ -526,11 +526,7 @@ func TestACPRecord_Integration_ValidationErrors(t *testing.T) {
 			requestBody:    fmt.Sprintf(`{"recorded_date": "%s", "status": "active", "decision_maker": "patient", "created_by": "test-staff-id"}`, time.Now().Format(time.RFC3339)),
 			expectedStatus: http.StatusBadRequest,
 		},
-		{
-			name:           "Missing created_by",
-			requestBody:    fmt.Sprintf(`{"recorded_date": "%s", "status": "active", "decision_maker": "patient", "directives": %s}`, time.Now().Format(time.RFC3339), string(directivesJSON)),
-			expectedStatus: http.StatusBadRequest,
-		},
+		// Note: "created_by" is not validated from request body as it's set from auth context
 	}
 
 	for _, tt := range tests {

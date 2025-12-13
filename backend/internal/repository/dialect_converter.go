@@ -29,7 +29,7 @@ func ConvertQueryForDialect(sql string, params map[string]interface{}) (string, 
 // convertToPostgresDialect converts @paramName syntax to $N syntax
 // and remaps parameter keys to p1, p2, etc.
 func convertToPostgresDialect(sql string, params map[string]interface{}) (string, map[string]interface{}) {
-	if params == nil || len(params) == 0 {
+	if len(params) == 0 {
 		return sql, params
 	}
 

@@ -86,18 +86,16 @@ func (r *IdentifierRepository) CreateIdentifier(ctx context.Context, req *models
 // GetIdentifierByID retrieves an identifier by ID
 // If decrypt is true and the identifier is a My Number, it will be decrypted
 func (r *IdentifierRepository) GetIdentifierByID(ctx context.Context, identifierID string, decrypt bool) (*models.PatientIdentifier, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			identifier_id, patient_id, identifier_type, identifier_value,
 			is_primary, valid_from, valid_to, issuer_name, issuer_code,
 			verification_status, verified_at, verified_by,
 			deleted, deleted_at, created_at, created_by, updated_at, updated_by
 		FROM patient_identifiers
 		WHERE identifier_id = @identifierID AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"identifierID": identifierID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -133,8 +131,7 @@ func (r *IdentifierRepository) GetIdentifierByID(ctx context.Context, identifier
 // GetIdentifiersByPatientID retrieves all identifiers for a patient
 // If decrypt is true, My Numbers will be decrypted
 func (r *IdentifierRepository) GetIdentifiersByPatientID(ctx context.Context, patientID string, decrypt bool) ([]*models.PatientIdentifier, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			identifier_id, patient_id, identifier_type, identifier_value,
 			is_primary, valid_from, valid_to, issuer_name, issuer_code,
 			verification_status, verified_at, verified_by,
@@ -142,10 +139,9 @@ func (r *IdentifierRepository) GetIdentifiersByPatientID(ctx context.Context, pa
 		FROM patient_identifiers
 		WHERE patient_id = @patientID AND deleted = false
 		ORDER BY is_primary DESC, created_at ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID": patientID,
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -283,8 +279,7 @@ func (r *IdentifierRepository) DeleteIdentifier(ctx context.Context, identifierI
 
 // GetPrimaryIdentifier retrieves the primary identifier for a patient by type
 func (r *IdentifierRepository) GetPrimaryIdentifier(ctx context.Context, patientID string, identifierType models.IdentifierType, decrypt bool) (*models.PatientIdentifier, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			identifier_id, patient_id, identifier_type, identifier_value,
 			is_primary, valid_from, valid_to, issuer_name, issuer_code,
 			verification_status, verified_at, verified_by,
@@ -295,11 +290,10 @@ func (r *IdentifierRepository) GetPrimaryIdentifier(ctx context.Context, patient
 			AND is_primary = true
 			AND deleted = false
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patientID":      patientID,
 			"identifierType": string(identifierType),
-		},
-	}
+		})
 
 	iter := r.client.Single().Query(ctx, stmt)
 	defer iter.Stop()

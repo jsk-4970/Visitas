@@ -13,10 +13,7 @@ type SpannerRepository struct {
 }
 
 func NewSpannerRepository(ctx context.Context, cfg *config.Config) (*SpannerRepository, error) {
-	// Set emulator if configured
-	if cfg.UseEmulator() {
-		// SPANNER_EMULATOR_HOST environment variable is already set
-	}
+	// Note: SPANNER_EMULATOR_HOST environment variable is read automatically by the Spanner client
 
 	dbPath := fmt.Sprintf("projects/%s/instances/%s/databases/%s",
 		cfg.ProjectID, cfg.SpannerInstance, cfg.SpannerDatabase)

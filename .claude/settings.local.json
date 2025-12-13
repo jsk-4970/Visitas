@@ -38,7 +38,19 @@
       "Bash(docker-compose down:*)",
       "Bash(pkill:*)",
       "Bash(SPANNER_EMULATOR_HOST=localhost:9010 gcloud config set:*)",
-      "Bash(SPANNER_EMULATOR_HOST=localhost:9010 gcloud spanner instances create:*)"
+      "Bash(SPANNER_EMULATOR_HOST=localhost:9010 gcloud spanner instances create:*)",
+      "Bash(python3:*)",
+      "Bash(gcloud spanner databases ddl update:*)",
+      "Bash(echo:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker restart:*)",
+      "Bash(export SPANNER_EMULATOR_HOST=\"localhost:9010\")",
+      "Bash(tee:*)",
+      "Bash(cd /Users/aburi/Desktop/Visitas/backend && go vet:*)",
+      "Bash(git commit:*)",
+      "Bash(cd:*)",
+      "Bash(go vet:*)",
+      "Bash(cut:*)"
     ]
   }
 }

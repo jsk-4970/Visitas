@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -47,19 +46,19 @@ func (r *CarePlanRepository) Create(ctx context.Context, patientID string, req *
 	}
 
 	if req.Description != nil {
-		carePlan.Description = sql.NullString{String: *req.Description, Valid: true}
+		carePlan.Description = spanner.NullString{StringVal: *req.Description, Valid: true}
 	}
 	if req.PeriodEnd != nil {
-		carePlan.PeriodEnd = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
+		carePlan.PeriodEnd = spanner.NullTime{Time: *req.PeriodEnd, Valid: true}
 	}
 
 	// Convert JSONB fields to strings for Spanner
-	var goalsStr, activitiesStr sql.NullString
+	var goalsStr, activitiesStr spanner.NullString
 	if len(req.Goals) > 0 {
-		goalsStr = sql.NullString{String: string(req.Goals), Valid: true}
+		goalsStr = spanner.NullString{StringVal: string(req.Goals), Valid: true}
 	}
 	if len(req.Activities) > 0 {
-		activitiesStr = sql.NullString{String: string(req.Activities), Valid: true}
+		activitiesStr = spanner.NullString{StringVal: string(req.Activities), Valid: true}
 	}
 
 	mutation := spanner.Insert("care_plans",
@@ -87,19 +86,17 @@ func (r *CarePlanRepository) Create(ctx context.Context, patientID string, req *
 
 // GetByID retrieves a care plan by ID
 func (r *CarePlanRepository) GetByID(ctx context.Context, patientID, planID string) (*models.CarePlan, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
-			goals, activities,
+			goals::text, activities::text,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND plan_id = @plan_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"plan_id":    planID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -165,20 +162,19 @@ func (r *CarePlanRepository) List(ctx context.Context, filter *models.CarePlanFi
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
-			goals, activities,
+			goals::text, activities::text,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		%s
 		ORDER BY period_start DESC, created_at DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -230,8 +226,8 @@ func (r *CarePlanRepository) Update(ctx context.Context, patientID, planID strin
 	}
 
 	if req.Description != nil {
-		updates["description"] = sql.NullString{String: *req.Description, Valid: true}
-		existing.Description = sql.NullString{String: *req.Description, Valid: true}
+		updates["description"] = spanner.NullString{StringVal: *req.Description, Valid: true}
+		existing.Description = spanner.NullString{StringVal: *req.Description, Valid: true}
 	}
 
 	if req.PeriodStart != nil {
@@ -240,17 +236,17 @@ func (r *CarePlanRepository) Update(ctx context.Context, patientID, planID strin
 	}
 
 	if req.PeriodEnd != nil {
-		updates["period_end"] = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
-		existing.PeriodEnd = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
+		updates["period_end"] = spanner.NullTime{Time: *req.PeriodEnd, Valid: true}
+		existing.PeriodEnd = spanner.NullTime{Time: *req.PeriodEnd, Valid: true}
 	}
 
 	if len(req.Goals) > 0 {
-		updates["goals"] = sql.NullString{String: string(req.Goals), Valid: true}
+		updates["goals"] = spanner.NullString{StringVal: string(req.Goals), Valid: true}
 		existing.Goals = req.Goals
 	}
 
 	if len(req.Activities) > 0 {
-		updates["activities"] = sql.NullString{String: string(req.Activities), Valid: true}
+		updates["activities"] = spanner.NullString{StringVal: string(req.Activities), Valid: true}
 		existing.Activities = req.Activities
 	}
 
@@ -285,7 +281,7 @@ func (r *CarePlanRepository) Update(ctx context.Context, patientID, planID strin
 }
 
 // UpdateWithVersion updates a care plan with optimistic locking
-func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, planID string, expectedVersion int, req *models.CarePlanUpdateRequest) (*models.CarePlan, error) {
+func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, planID string, expectedVersion int64, req *models.CarePlanUpdateRequest) (*models.CarePlan, error) {
 	// First, get the existing care plan
 	existing, err := r.GetByID(ctx, patientID, planID)
 	if err != nil {
@@ -316,8 +312,8 @@ func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, p
 	}
 
 	if req.Description != nil {
-		updates["description"] = sql.NullString{String: *req.Description, Valid: true}
-		existing.Description = sql.NullString{String: *req.Description, Valid: true}
+		updates["description"] = spanner.NullString{StringVal: *req.Description, Valid: true}
+		existing.Description = spanner.NullString{StringVal: *req.Description, Valid: true}
 	}
 
 	if req.PeriodStart != nil {
@@ -326,17 +322,17 @@ func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, p
 	}
 
 	if req.PeriodEnd != nil {
-		updates["period_end"] = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
-		existing.PeriodEnd = sql.NullTime{Time: *req.PeriodEnd, Valid: true}
+		updates["period_end"] = spanner.NullTime{Time: *req.PeriodEnd, Valid: true}
+		existing.PeriodEnd = spanner.NullTime{Time: *req.PeriodEnd, Valid: true}
 	}
 
 	if len(req.Goals) > 0 {
-		updates["goals"] = sql.NullString{String: string(req.Goals), Valid: true}
+		updates["goals"] = spanner.NullString{StringVal: string(req.Goals), Valid: true}
 		existing.Goals = req.Goals
 	}
 
 	if len(req.Activities) > 0 {
-		updates["activities"] = sql.NullString{String: string(req.Activities), Valid: true}
+		updates["activities"] = spanner.NullString{StringVal: string(req.Activities), Valid: true}
 		existing.Activities = req.Activities
 	}
 
@@ -372,7 +368,7 @@ func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, p
 
 // Delete deletes a care plan
 func (r *CarePlanRepository) Delete(ctx context.Context, patientID, planID string) error {
-	mutation := spanner.Delete("care_plans", spanner.Key{patientID, planID})
+	mutation := spanner.Delete("care_plans", spanner.Key{planID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -384,19 +380,17 @@ func (r *CarePlanRepository) Delete(ctx context.Context, patientID, planID strin
 
 // GetActiveCarePlans retrieves active care plans for a patient
 func (r *CarePlanRepository) GetActiveCarePlans(ctx context.Context, patientID string) ([]*models.CarePlan, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
-			goals, activities,
+			goals::text, activities::text,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY period_start DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -424,7 +418,7 @@ func (r *CarePlanRepository) GetActiveCarePlans(ctx context.Context, patientID s
 // scanCarePlan scans a Spanner row into a CarePlan model
 func scanCarePlan(row *spanner.Row) (*models.CarePlan, error) {
 	var carePlan models.CarePlan
-	var goalsStr, activitiesStr sql.NullString
+	var goalsStr, activitiesStr spanner.NullString
 
 	err := row.Columns(
 		&carePlan.PlanID,
@@ -448,10 +442,10 @@ func scanCarePlan(row *spanner.Row) (*models.CarePlan, error) {
 
 	// Convert JSONB strings back to json.RawMessage
 	if goalsStr.Valid {
-		carePlan.Goals = json.RawMessage(goalsStr.String)
+		carePlan.Goals = json.RawMessage(goalsStr.StringVal)
 	}
 	if activitiesStr.Valid {
-		carePlan.Activities = json.RawMessage(activitiesStr.String)
+		carePlan.Activities = json.RawMessage(activitiesStr.StringVal)
 	}
 
 	return &carePlan, nil

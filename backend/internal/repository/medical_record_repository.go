@@ -325,7 +325,7 @@ func (r *MedicalRecordRepository) Update(ctx context.Context, patientID, recordI
 }
 
 // UpdateWithVersion updates a medical record with optimistic locking
-func (r *MedicalRecordRepository) UpdateWithVersion(ctx context.Context, patientID, recordID string, expectedVersion int, req *models.MedicalRecordUpdateRequest, updatedBy string) (*models.MedicalRecord, error) {
+func (r *MedicalRecordRepository) UpdateWithVersion(ctx context.Context, patientID, recordID string, expectedVersion int64, req *models.MedicalRecordUpdateRequest, updatedBy string) (*models.MedicalRecord, error) {
 	// First, get the existing record
 	existing, err := r.GetByID(ctx, patientID, recordID)
 	if err != nil {
@@ -609,7 +609,7 @@ func scanMedicalRecord(row *spanner.Row) (*models.MedicalRecord, error) {
 	}
 
 	// Assign version
-	record.Version = int(version)
+	record.Version = version
 
 	// Convert nullable fields
 	if visitEndedAt.Valid {

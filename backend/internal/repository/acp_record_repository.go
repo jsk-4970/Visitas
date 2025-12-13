@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -32,7 +31,7 @@ func (r *ACPRecordRepository) Create(ctx context.Context, patientID string, req 
 	now := time.Now()
 
 	// Default version is 1 for new records
-	version := 1
+	var version int64 = 1
 
 	record := &models.ACPRecord{
 		ACPID:        acpID,
@@ -55,34 +54,34 @@ func (r *ACPRecordRepository) Create(ctx context.Context, patientID string, req 
 
 	// Handle optional fields
 	if req.ProxyPersonID != nil {
-		record.ProxyPersonID = sql.NullString{String: *req.ProxyPersonID, Valid: true}
+		record.ProxyPersonID = spanner.NullString{StringVal: *req.ProxyPersonID, Valid: true}
 	}
 	if req.ValuesNarrative != nil {
-		record.ValuesNarrative = sql.NullString{String: *req.ValuesNarrative, Valid: true}
+		record.ValuesNarrative = spanner.NullString{StringVal: *req.ValuesNarrative, Valid: true}
 	}
 
 	// Convert JSONB fields to strings for Spanner
-	var directivesStr sql.NullString
+	var directivesStr spanner.NullString
 	if len(req.Directives) > 0 {
-		directivesStr = sql.NullString{String: string(req.Directives), Valid: true}
+		directivesStr = spanner.NullString{StringVal: string(req.Directives), Valid: true}
 	}
 
-	var legalDocumentsStr sql.NullString
+	var legalDocumentsStr spanner.NullString
 	if len(req.LegalDocuments) > 0 {
 		record.LegalDocuments = req.LegalDocuments
-		legalDocumentsStr = sql.NullString{String: string(req.LegalDocuments), Valid: true}
+		legalDocumentsStr = spanner.NullString{StringVal: string(req.LegalDocuments), Valid: true}
 	}
 
-	var discussionLogStr sql.NullString
+	var discussionLogStr spanner.NullString
 	if len(req.DiscussionLog) > 0 {
 		record.DiscussionLog = req.DiscussionLog
-		discussionLogStr = sql.NullString{String: string(req.DiscussionLog), Valid: true}
+		discussionLogStr = spanner.NullString{StringVal: string(req.DiscussionLog), Valid: true}
 	}
 
-	var accessRestrictedToStr sql.NullString
+	var accessRestrictedToStr spanner.NullString
 	if len(req.AccessRestrictedTo) > 0 {
 		record.AccessRestrictedTo = req.AccessRestrictedTo
-		accessRestrictedToStr = sql.NullString{String: string(req.AccessRestrictedTo), Valid: true}
+		accessRestrictedToStr = spanner.NullString{StringVal: string(req.AccessRestrictedTo), Valid: true}
 	}
 
 	mutation := spanner.Insert("acp_records",
@@ -114,21 +113,19 @@ func (r *ACPRecordRepository) Create(ctx context.Context, patientID string, req 
 
 // GetByID retrieves an ACP record by ID
 func (r *ACPRecordRepository) GetByID(ctx context.Context, patientID, acpID string) (*models.ACPRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id AND acp_id = @acp_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"acp_id":     acpID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -189,22 +186,21 @@ func (r *ACPRecordRepository) List(ctx context.Context, filter *models.ACPRecord
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		%s
 		ORDER BY recorded_date DESC, version DESC, created_at DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -256,27 +252,27 @@ func (r *ACPRecordRepository) Update(ctx context.Context, patientID, acpID strin
 	}
 
 	if req.ProxyPersonID != nil {
-		updates["proxy_person_id"] = sql.NullString{String: *req.ProxyPersonID, Valid: true}
-		existing.ProxyPersonID = sql.NullString{String: *req.ProxyPersonID, Valid: true}
+		updates["proxy_person_id"] = spanner.NullString{StringVal: *req.ProxyPersonID, Valid: true}
+		existing.ProxyPersonID = spanner.NullString{StringVal: *req.ProxyPersonID, Valid: true}
 	}
 
 	if len(req.Directives) > 0 {
-		updates["directives"] = sql.NullString{String: string(req.Directives), Valid: true}
+		updates["directives"] = spanner.NullString{StringVal: string(req.Directives), Valid: true}
 		existing.Directives = req.Directives
 	}
 
 	if req.ValuesNarrative != nil {
-		updates["values_narrative"] = sql.NullString{String: *req.ValuesNarrative, Valid: true}
-		existing.ValuesNarrative = sql.NullString{String: *req.ValuesNarrative, Valid: true}
+		updates["values_narrative"] = spanner.NullString{StringVal: *req.ValuesNarrative, Valid: true}
+		existing.ValuesNarrative = spanner.NullString{StringVal: *req.ValuesNarrative, Valid: true}
 	}
 
 	if len(req.LegalDocuments) > 0 {
-		updates["legal_documents"] = sql.NullString{String: string(req.LegalDocuments), Valid: true}
+		updates["legal_documents"] = spanner.NullString{StringVal: string(req.LegalDocuments), Valid: true}
 		existing.LegalDocuments = req.LegalDocuments
 	}
 
 	if len(req.DiscussionLog) > 0 {
-		updates["discussion_log"] = sql.NullString{String: string(req.DiscussionLog), Valid: true}
+		updates["discussion_log"] = spanner.NullString{StringVal: string(req.DiscussionLog), Valid: true}
 		existing.DiscussionLog = req.DiscussionLog
 	}
 
@@ -286,7 +282,7 @@ func (r *ACPRecordRepository) Update(ctx context.Context, patientID, acpID strin
 	}
 
 	if len(req.AccessRestrictedTo) > 0 {
-		updates["access_restricted_to"] = sql.NullString{String: string(req.AccessRestrictedTo), Valid: true}
+		updates["access_restricted_to"] = spanner.NullString{StringVal: string(req.AccessRestrictedTo), Valid: true}
 		existing.AccessRestrictedTo = req.AccessRestrictedTo
 	}
 
@@ -327,22 +323,20 @@ func (r *ACPRecordRepository) Delete(ctx context.Context, patientID, acpID strin
 
 // GetLatestACP retrieves the latest active ACP record for a patient
 func (r *ACPRecordRepository) GetLatestACP(ctx context.Context, patientID string) (*models.ACPRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY version DESC, recorded_date DESC
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -360,21 +354,19 @@ func (r *ACPRecordRepository) GetLatestACP(ctx context.Context, patientID string
 
 // GetACPHistory retrieves the complete history of ACP records for a patient
 func (r *ACPRecordRepository) GetACPHistory(ctx context.Context, patientID string) ([]*models.ACPRecord, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id
 		ORDER BY version DESC, recorded_date DESC, created_at DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -402,7 +394,7 @@ func (r *ACPRecordRepository) GetACPHistory(ctx context.Context, patientID strin
 // scanACPRecord scans a Spanner row into an ACPRecord model
 func scanACPRecord(row *spanner.Row) (*models.ACPRecord, error) {
 	var record models.ACPRecord
-	var directivesStr, legalDocumentsStr, discussionLogStr, accessRestrictedToStr sql.NullString
+	var directivesStr, legalDocumentsStr, discussionLogStr, accessRestrictedToStr spanner.NullString
 
 	err := row.Columns(
 		&record.ACPID,
@@ -427,16 +419,16 @@ func scanACPRecord(row *spanner.Row) (*models.ACPRecord, error) {
 
 	// Convert JSONB strings back to json.RawMessage
 	if directivesStr.Valid {
-		record.Directives = json.RawMessage(directivesStr.String)
+		record.Directives = json.RawMessage(directivesStr.StringVal)
 	}
 	if legalDocumentsStr.Valid {
-		record.LegalDocuments = json.RawMessage(legalDocumentsStr.String)
+		record.LegalDocuments = json.RawMessage(legalDocumentsStr.StringVal)
 	}
 	if discussionLogStr.Valid {
-		record.DiscussionLog = json.RawMessage(discussionLogStr.String)
+		record.DiscussionLog = json.RawMessage(discussionLogStr.StringVal)
 	}
 	if accessRestrictedToStr.Valid {
-		record.AccessRestrictedTo = json.RawMessage(accessRestrictedToStr.String)
+		record.AccessRestrictedTo = json.RawMessage(accessRestrictedToStr.StringVal)
 	}
 
 	return &record, nil

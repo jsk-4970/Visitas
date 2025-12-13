@@ -101,7 +101,7 @@ func SetupTestServer(t *testing.T) *TestServer {
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy"}`))
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
 
 	// API routes (without authentication for testing)
@@ -264,10 +264,18 @@ func loadTestConfig() (*config.Config, error) {
 		database = "stunning-grin-480914-n1-db"
 	}
 
+	// Set emulator host for tests
+	emulatorHost := os.Getenv("SPANNER_EMULATOR_HOST")
+	if emulatorHost == "" {
+		emulatorHost = "localhost:9010"
+		os.Setenv("SPANNER_EMULATOR_HOST", emulatorHost)
+	}
+
 	return &config.Config{
 		ProjectID:        projectID,
 		SpannerInstance:  instance,
 		SpannerDatabase:  database,
+		SpannerEmulator:  emulatorHost,
 		Port:             "8080",
 		Env:              "test",
 		AllowedOrigins:   []string{"*"},
@@ -346,7 +354,7 @@ func (ts *TestServer) CreateTestPatient(t *testing.T) string {
 	require.NotEmpty(t, patientID, "patient_id is empty")
 
 	// Assign the test patient to the test staff
-	assignJSON := fmt.Sprintf(`{"staff_id": "test-staff-id", "role": "doctor", "assignment_type": "primary"}`)
+	assignJSON := `{"staff_id": "test-staff-id", "role": "doctor", "assignment_type": "primary"}`
 	assignResp := ts.MakeRequest(t, http.MethodPost, fmt.Sprintf("/api/v1/patients/%s/assign", patientID), strings.NewReader(assignJSON))
 	require.Equal(t, http.StatusOK, assignResp.StatusCode, "Failed to assign patient to staff")
 
@@ -362,12 +370,25 @@ func (ts *TestServer) CreateTestPatient(t *testing.T) string {
 func (ts *TestServer) DeleteTestPatient(t *testing.T, patientID string) {
 	t.Helper()
 
-	resp := ts.MakeRequest(t, http.MethodDelete, fmt.Sprintf("/api/v1/patients/%s", patientID), nil)
+	// Try to make the request, but don't fail if server is already closed
+	req, err := http.NewRequest(http.MethodDelete, ts.Server.URL+fmt.Sprintf("/api/v1/patients/%s", patientID), nil)
+	if err != nil {
+		t.Logf("Warning: Failed to create delete request for patient %s: %v", patientID, err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		// Server might be already shut down, which is OK during cleanup
+		t.Logf("Info: Could not delete test patient %s (server may be closed): %v", patientID, err)
+		return
+	}
+	defer resp.Body.Close()
+
 	// It's OK if deletion fails (e.g., patient already deleted or doesn't exist)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		t.Logf("Warning: Failed to delete test patient %s: status %d", patientID, resp.StatusCode)
 	}
-	resp.Body.Close()
 }
 
 // CleanupTestData removes all test data from the database

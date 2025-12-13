@@ -23,6 +23,12 @@ func NewMedicalRecordTemplateService(templateRepo *repository.MedicalRecordTempl
 
 // CreateTemplate creates a new medical record template
 func (s *MedicalRecordTemplateService) CreateTemplate(ctx context.Context, req *models.MedicalRecordTemplateCreateRequest, createdBy string) (*models.MedicalRecordTemplate, error) {
+	// Validate template_name is not empty
+	if req.TemplateName == "" {
+		logger.WarnContext(ctx, "Missing template_name", nil)
+		return nil, fmt.Errorf("template_name is required")
+	}
+
 	// Validate specialty if provided
 	if req.Specialty != nil {
 		validSpecialties := map[string]bool{

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -27,8 +26,9 @@ func NewMedicationOrderRepository(spannerRepo *SpannerRepository) *MedicationOrd
 }
 
 // Create creates a new medication order
-func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string, req *models.MedicationOrderCreateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string, req *models.MedicationOrderCreateRequest, createdBy string) (*models.MedicationOrder, error) {
 	orderID := uuid.New().String()
+	now := time.Now()
 
 	order := &models.MedicationOrder{
 		OrderID:           orderID,
@@ -41,19 +41,22 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 		PrescribedBy:      req.PrescribedBy,
 		DispensePharmacy:  req.DispensePharmacy,
 		Version:           1,
+		CreatedAt:         now,
+		CreatedBy:         spanner.NullString{StringVal: createdBy, Valid: true},
+		UpdatedAt:         now,
 	}
 
 	if req.ReasonReference != nil {
-		order.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+		order.ReasonReference = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
 	}
 
 	// Convert JSONB fields to strings for Spanner
 	medicationStr := string(req.Medication)
 	dosageInstructionStr := string(req.DosageInstruction)
 
-	var dispensePharmacyStr sql.NullString
+	var dispensePharmacyStr spanner.NullString
 	if len(req.DispensePharmacy) > 0 {
-		dispensePharmacyStr = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		dispensePharmacyStr = spanner.NullString{StringVal: string(req.DispensePharmacy), Valid: true}
 	}
 
 	mutation := spanner.Insert("medication_orders",
@@ -62,12 +65,14 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 			"medication", "dosage_instruction",
 			"prescribed_date", "prescribed_by",
 			"dispense_pharmacy", "reason_reference", "version",
+			"created_at", "created_by", "updated_at",
 		},
 		[]interface{}{
 			orderID, patientID, req.Status, req.Intent,
 			medicationStr, dosageInstructionStr,
 			req.PrescribedDate, req.PrescribedBy,
 			dispensePharmacyStr, order.ReasonReference, 1,
+			now, spanner.NullString{StringVal: createdBy, Valid: true}, now,
 		},
 	)
 
@@ -81,19 +86,18 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 
 // GetByID retrieves a medication order by ID
 func (r *MedicationOrderRepository) GetByID(ctx context.Context, patientID, orderID string) (*models.MedicationOrder, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND order_id = @order_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"order_id":   orderID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -164,20 +168,20 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		%s
 		ORDER BY prescribed_date DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -203,15 +207,21 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 }
 
 // Update updates a medication order
-func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, orderID string, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, orderID string, req *models.MedicationOrderUpdateRequest, updatedBy string) (*models.MedicationOrder, error) {
 	// First, get the existing order
 	existing, err := r.GetByID(ctx, patientID, orderID)
 	if err != nil {
 		return nil, err
 	}
 
+	now := time.Now()
+
 	// Build update map
 	updates := make(map[string]interface{})
+	updates["updated_at"] = now
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
+	existing.UpdatedAt = now
+	existing.UpdatedBy = spanner.NullString{StringVal: updatedBy, Valid: true}
 
 	if req.Status != nil {
 		updates["status"] = *req.Status
@@ -244,13 +254,13 @@ func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, order
 	}
 
 	if len(req.DispensePharmacy) > 0 {
-		updates["dispense_pharmacy"] = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		updates["dispense_pharmacy"] = spanner.NullString{StringVal: string(req.DispensePharmacy), Valid: true}
 		existing.DispensePharmacy = req.DispensePharmacy
 	}
 
 	if req.ReasonReference != nil {
-		updates["reason_reference"] = sql.NullString{String: *req.ReasonReference, Valid: true}
-		existing.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+		updates["reason_reference"] = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
+		existing.ReasonReference = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
 	}
 
 	if len(updates) == 0 {
@@ -281,7 +291,7 @@ func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, order
 }
 
 // UpdateWithVersion updates a medication order with optimistic locking
-func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int64, req *models.MedicationOrderUpdateRequest, updatedBy string) (*models.MedicationOrder, error) {
 	// First, get the existing order
 	existing, err := r.GetByID(ctx, patientID, orderID)
 	if err != nil {
@@ -293,8 +303,14 @@ func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patie
 		return nil, fmt.Errorf("CONFLICT: Medication order was modified by another user. Expected version %d but found %d", expectedVersion, existing.Version)
 	}
 
+	now := time.Now()
+
 	// Build update map
 	updates := make(map[string]interface{})
+	updates["updated_at"] = now
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
+	existing.UpdatedAt = now
+	existing.UpdatedBy = spanner.NullString{StringVal: updatedBy, Valid: true}
 
 	if req.Status != nil {
 		updates["status"] = *req.Status
@@ -327,13 +343,13 @@ func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patie
 	}
 
 	if len(req.DispensePharmacy) > 0 {
-		updates["dispense_pharmacy"] = sql.NullString{String: string(req.DispensePharmacy), Valid: true}
+		updates["dispense_pharmacy"] = spanner.NullString{StringVal: string(req.DispensePharmacy), Valid: true}
 		existing.DispensePharmacy = req.DispensePharmacy
 	}
 
 	if req.ReasonReference != nil {
-		updates["reason_reference"] = sql.NullString{String: *req.ReasonReference, Valid: true}
-		existing.ReasonReference = sql.NullString{String: *req.ReasonReference, Valid: true}
+		updates["reason_reference"] = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
+		existing.ReasonReference = spanner.NullString{StringVal: *req.ReasonReference, Valid: true}
 	}
 
 	if len(updates) == 0 {
@@ -365,7 +381,7 @@ func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patie
 
 // Delete deletes a medication order
 func (r *MedicationOrderRepository) Delete(ctx context.Context, patientID, orderID string) error {
-	mutation := spanner.Delete("medication_orders", spanner.Key{patientID, orderID})
+	mutation := spanner.Delete("medication_orders", spanner.Key{orderID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -377,19 +393,18 @@ func (r *MedicationOrderRepository) Delete(ctx context.Context, patientID, order
 
 // GetActiveOrders retrieves all active medication orders for a patient
 func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patientID string) ([]*models.MedicationOrder, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY prescribed_date DESC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -416,23 +431,22 @@ func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patient
 
 // GetOrdersByPrescription retrieves medication orders by prescription details
 func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context, patientID, prescribedBy string, prescribedDate time.Time) ([]*models.MedicationOrder, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		WHERE patient_id = @patient_id
 		  AND prescribed_by = @prescribed_by
 		  AND prescribed_date = @prescribed_date
 		ORDER BY order_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id":      patientID,
 			"prescribed_by":   prescribedBy,
 			"prescribed_date": prescribedDate,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -461,7 +475,7 @@ func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context,
 func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 	var order models.MedicationOrder
 	var medicationStr, dosageInstructionStr string
-	var dispensePharmacyStr sql.NullString
+	var dispensePharmacyStr spanner.NullString
 
 	err := row.Columns(
 		&order.OrderID,
@@ -475,6 +489,10 @@ func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 		&dispensePharmacyStr,
 		&order.ReasonReference,
 		&order.Version,
+		&order.CreatedAt,
+		&order.CreatedBy,
+		&order.UpdatedAt,
+		&order.UpdatedBy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan medication order: %w", err)
@@ -484,7 +502,7 @@ func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 	order.Medication = json.RawMessage(medicationStr)
 	order.DosageInstruction = json.RawMessage(dosageInstructionStr)
 	if dispensePharmacyStr.Valid {
-		order.DispensePharmacy = json.RawMessage(dispensePharmacyStr.String)
+		order.DispensePharmacy = json.RawMessage(dispensePharmacyStr.StringVal)
 	}
 
 	return &order, nil

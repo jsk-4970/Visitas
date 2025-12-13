@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -50,17 +49,17 @@ func (r *MedicalRecordTemplateRepository) Create(ctx context.Context, req *model
 	}
 	template.SOAPTemplate = req.SOAPTemplate
 
-	// Convert optional fields to sql.Null types
-	var description, specialty sql.NullString
+	// Convert optional fields to spanner.Null types
+	var description, specialty spanner.NullString
 	if req.TemplateDescription != nil {
-		description = sql.NullString{String: *req.TemplateDescription, Valid: true}
+		description = spanner.NullString{StringVal: *req.TemplateDescription, Valid: true}
 	}
 	if req.Specialty != nil {
-		specialty = sql.NullString{String: *req.Specialty, Valid: true}
+		specialty = spanner.NullString{StringVal: *req.Specialty, Valid: true}
 	}
 
 	// Convert JSONB to string
-	soapTemplateStr := sql.NullString{String: string(req.SOAPTemplate), Valid: true}
+	soapTemplateStr := spanner.NullString{StringVal: string(req.SOAPTemplate), Valid: true}
 
 	mutation := spanner.Insert("medical_record_templates",
 		[]string{
@@ -85,18 +84,16 @@ func (r *MedicalRecordTemplateRepository) Create(ctx context.Context, req *model
 
 // GetByID retrieves a template by ID
 func (r *MedicalRecordTemplateRepository) GetByID(ctx context.Context, templateID string) (*models.MedicalRecordTemplate, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
 		WHERE template_id = @template_id AND deleted = false`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"template_id": templateID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -144,20 +141,19 @@ func (r *MedicalRecordTemplateRepository) List(ctx context.Context, filter *mode
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
+	params["limit"] = int64(limit)
+	params["offset"] = int64(offset)
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
 		%s
 		ORDER BY usage_count DESC, template_name ASC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = int64(limit)
-	stmt.Params["offset"] = int64(offset)
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -199,17 +195,17 @@ func (r *MedicalRecordTemplateRepository) Update(ctx context.Context, templateID
 	}
 
 	if req.TemplateDescription != nil {
-		updates["template_description"] = sql.NullString{String: *req.TemplateDescription, Valid: true}
+		updates["template_description"] = spanner.NullString{StringVal: *req.TemplateDescription, Valid: true}
 		existing.TemplateDescription = req.TemplateDescription
 	}
 
 	if req.Specialty != nil {
-		updates["specialty"] = sql.NullString{String: *req.Specialty, Valid: true}
+		updates["specialty"] = spanner.NullString{StringVal: *req.Specialty, Valid: true}
 		existing.Specialty = req.Specialty
 	}
 
 	if len(req.SOAPTemplate) > 0 {
-		updates["soap_template"] = sql.NullString{String: string(req.SOAPTemplate), Valid: true}
+		updates["soap_template"] = spanner.NullString{StringVal: string(req.SOAPTemplate), Valid: true}
 		existing.SOAPTemplate = req.SOAPTemplate
 	}
 
@@ -220,7 +216,7 @@ func (r *MedicalRecordTemplateRepository) Update(ctx context.Context, templateID
 	// Update audit fields
 	now := time.Now()
 	updates["updated_at"] = now
-	updates["updated_by"] = sql.NullString{String: updatedBy, Valid: true}
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
 	existing.UpdatedAt = now
 	existing.UpdatedBy = &updatedBy
 
@@ -257,7 +253,7 @@ func (r *MedicalRecordTemplateRepository) Delete(ctx context.Context, templateID
 		[]interface{}{
 			templateID,
 			true,
-			sql.NullTime{Time: now, Valid: true},
+			spanner.NullTime{Time: now, Valid: true},
 			now,
 		},
 	)
@@ -274,12 +270,10 @@ func (r *MedicalRecordTemplateRepository) Delete(ctx context.Context, templateID
 func (r *MedicalRecordTemplateRepository) IncrementUsageCount(ctx context.Context, templateID string) error {
 	_, err := r.spannerRepo.client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		// Read current usage count
-		stmt := spanner.Statement{
-			SQL: `SELECT usage_count FROM medical_record_templates WHERE template_id = @template_id`,
-			Params: map[string]interface{}{
+		stmt := NewStatement(`SELECT usage_count FROM medical_record_templates WHERE template_id = @template_id`,
+			map[string]interface{}{
 				"template_id": templateID,
-			},
-		}
+			})
 
 		iter := txn.Query(ctx, stmt)
 		defer iter.Stop()
@@ -315,16 +309,15 @@ func (r *MedicalRecordTemplateRepository) IncrementUsageCount(ctx context.Contex
 
 // GetSystemTemplates retrieves all system templates
 func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context) ([]*models.MedicalRecordTemplate, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
 		WHERE is_system_template = true AND deleted = false
 		ORDER BY specialty, template_name`,
-	}
+		nil)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -351,19 +344,17 @@ func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context
 
 // GetBySpecialty retrieves templates by specialty
 func (r *MedicalRecordTemplateRepository) GetBySpecialty(ctx context.Context, specialty string) ([]*models.MedicalRecordTemplate, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
+	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
 		WHERE specialty = @specialty AND deleted = false
 		ORDER BY usage_count DESC, template_name ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"specialty": specialty,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -393,10 +384,10 @@ func scanTemplate(row *spanner.Row) (*models.MedicalRecordTemplate, error) {
 	var template models.MedicalRecordTemplate
 
 	// Nullable fields
-	var description, specialty sql.NullString
-	var soapTemplateStr sql.NullString
-	var updatedBy sql.NullString
-	var deletedAt sql.NullTime
+	var description, specialty spanner.NullString
+	var soapTemplateStr spanner.NullString
+	var updatedBy spanner.NullString
+	var deletedAt spanner.NullTime
 
 	err := row.Columns(
 		&template.TemplateID,
@@ -419,16 +410,16 @@ func scanTemplate(row *spanner.Row) (*models.MedicalRecordTemplate, error) {
 
 	// Convert nullable fields
 	if description.Valid {
-		template.TemplateDescription = &description.String
+		template.TemplateDescription = &description.StringVal
 	}
 	if specialty.Valid {
-		template.Specialty = &specialty.String
+		template.Specialty = &specialty.StringVal
 	}
 	if soapTemplateStr.Valid {
-		template.SOAPTemplate = json.RawMessage(soapTemplateStr.String)
+		template.SOAPTemplate = json.RawMessage(soapTemplateStr.StringVal)
 	}
 	if updatedBy.Valid {
-		template.UpdatedBy = &updatedBy.String
+		template.UpdatedBy = &updatedBy.StringVal
 	}
 	if deletedAt.Valid {
 		template.DeletedAt = &deletedAt.Time

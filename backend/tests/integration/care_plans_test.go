@@ -355,7 +355,7 @@ func TestCarePlan_Integration_Delete(t *testing.T) {
 	// Test: Delete the care plan
 	t.Run("Delete care plan", func(t *testing.T) {
 		deleteResp := ts.MakeRequest(t, http.MethodDelete, fmt.Sprintf("/api/v1/patients/%s/care-plans/%s", patientID, carePlan.PlanID), nil)
-		assert.Equal(t, http.StatusOK, deleteResp.StatusCode)
+		assert.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
 
 		// Verify the care plan is deleted (should return 404)
 		getResp := ts.MakeRequest(t, http.MethodGet, fmt.Sprintf("/api/v1/patients/%s/care-plans/%s", patientID, carePlan.PlanID), nil)

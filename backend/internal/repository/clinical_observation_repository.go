@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -27,7 +26,7 @@ func NewClinicalObservationRepository(spannerRepo *SpannerRepository) *ClinicalO
 }
 
 // Create creates a new clinical observation
-func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID string, req *models.ClinicalObservationCreateRequest) (*models.ClinicalObservation, error) {
+func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID string, req *models.ClinicalObservationCreateRequest, createdBy string) (*models.ClinicalObservation, error) {
 	observationID := uuid.New().String()
 	now := time.Now()
 
@@ -39,35 +38,40 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 		EffectiveDatetime: req.EffectiveDatetime,
 		Issued:            now,
 		Value:             req.Value,
+		CreatedAt:         now,
+		CreatedBy:         createdBy,
+		UpdatedAt:         now,
 	}
 
 	if req.Interpretation != nil {
-		observation.Interpretation = sql.NullString{String: *req.Interpretation, Valid: true}
+		observation.Interpretation = spanner.NullString{StringVal: *req.Interpretation, Valid: true}
 	}
 	if req.PerformerID != nil {
-		observation.PerformerID = sql.NullString{String: *req.PerformerID, Valid: true}
+		observation.PerformerID = spanner.NullString{StringVal: *req.PerformerID, Valid: true}
 	}
 	if req.DeviceID != nil {
-		observation.DeviceID = sql.NullString{String: *req.DeviceID, Valid: true}
+		observation.DeviceID = spanner.NullString{StringVal: *req.DeviceID, Valid: true}
 	}
 	if req.VisitRecordID != nil {
-		observation.VisitRecordID = sql.NullString{String: *req.VisitRecordID, Valid: true}
+		observation.VisitRecordID = spanner.NullString{StringVal: *req.VisitRecordID, Valid: true}
 	}
 
 	// Convert JSONB fields to strings for Spanner
-	codeStr := sql.NullString{String: string(req.Code), Valid: true}
-	valueStr := sql.NullString{String: string(req.Value), Valid: true}
+	codeStr := spanner.NullString{StringVal: string(req.Code), Valid: true}
+	valueStr := spanner.NullString{StringVal: string(req.Value), Valid: true}
 
 	mutation := spanner.Insert("clinical_observations",
 		[]string{
 			"observation_id", "patient_id", "category", "code",
 			"effective_datetime", "issued", "value", "interpretation",
 			"performer_id", "device_id", "visit_record_id",
+			"created_at", "created_by", "updated_at",
 		},
 		[]interface{}{
 			observationID, patientID, req.Category, codeStr,
 			req.EffectiveDatetime, now, valueStr, observation.Interpretation,
 			observation.PerformerID, observation.DeviceID, observation.VisitRecordID,
+			now, createdBy, now,
 		},
 	)
 
@@ -81,18 +85,17 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 
 // GetByID retrieves a clinical observation by ID
 func (r *ClinicalObservationRepository) GetByID(ctx context.Context, patientID, observationID string) (*models.ClinicalObservation, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
-			performer_id, device_id, visit_record_id
+	stmt := NewStatement(`SELECT
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND observation_id = @observation_id`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id":     patientID,
 			"observation_id": observationID,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -163,19 +166,19 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 		offset = filter.Offset
 	}
 
-	stmt := spanner.Statement{
-		SQL: fmt.Sprintf(`SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
-			performer_id, device_id, visit_record_id
+	params["limit"] = limit
+	params["offset"] = offset
+
+	stmt := NewStatement(fmt.Sprintf(`SELECT
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		%s
 		ORDER BY effective_datetime DESC, issued DESC
 		LIMIT @limit OFFSET @offset`, whereClause),
-		Params: params,
-	}
-	stmt.Params["limit"] = limit
-	stmt.Params["offset"] = offset
+		params)
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -201,15 +204,21 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 }
 
 // Update updates a clinical observation
-func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, observationID string, req *models.ClinicalObservationUpdateRequest) (*models.ClinicalObservation, error) {
+func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, observationID string, req *models.ClinicalObservationUpdateRequest, updatedBy string) (*models.ClinicalObservation, error) {
 	// First, get the existing observation
 	existing, err := r.GetByID(ctx, patientID, observationID)
 	if err != nil {
 		return nil, err
 	}
 
+	now := time.Now()
+
 	// Build update map
 	updates := make(map[string]interface{})
+	updates["updated_at"] = now
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
+	existing.UpdatedAt = now
+	existing.UpdatedBy = spanner.NullString{StringVal: updatedBy, Valid: true}
 
 	if req.Category != nil {
 		updates["category"] = *req.Category
@@ -217,7 +226,7 @@ func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, o
 	}
 
 	if len(req.Code) > 0 {
-		updates["code"] = sql.NullString{String: string(req.Code), Valid: true}
+		updates["code"] = spanner.NullString{StringVal: string(req.Code), Valid: true}
 		existing.Code = req.Code
 	}
 
@@ -227,28 +236,28 @@ func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, o
 	}
 
 	if len(req.Value) > 0 {
-		updates["value"] = sql.NullString{String: string(req.Value), Valid: true}
+		updates["value"] = spanner.NullString{StringVal: string(req.Value), Valid: true}
 		existing.Value = req.Value
 	}
 
 	if req.Interpretation != nil {
-		updates["interpretation"] = sql.NullString{String: *req.Interpretation, Valid: true}
-		existing.Interpretation = sql.NullString{String: *req.Interpretation, Valid: true}
+		updates["interpretation"] = spanner.NullString{StringVal: *req.Interpretation, Valid: true}
+		existing.Interpretation = spanner.NullString{StringVal: *req.Interpretation, Valid: true}
 	}
 
 	if req.PerformerID != nil {
-		updates["performer_id"] = sql.NullString{String: *req.PerformerID, Valid: true}
-		existing.PerformerID = sql.NullString{String: *req.PerformerID, Valid: true}
+		updates["performer_id"] = spanner.NullString{StringVal: *req.PerformerID, Valid: true}
+		existing.PerformerID = spanner.NullString{StringVal: *req.PerformerID, Valid: true}
 	}
 
 	if req.DeviceID != nil {
-		updates["device_id"] = sql.NullString{String: *req.DeviceID, Valid: true}
-		existing.DeviceID = sql.NullString{String: *req.DeviceID, Valid: true}
+		updates["device_id"] = spanner.NullString{StringVal: *req.DeviceID, Valid: true}
+		existing.DeviceID = spanner.NullString{StringVal: *req.DeviceID, Valid: true}
 	}
 
 	if req.VisitRecordID != nil {
-		updates["visit_record_id"] = sql.NullString{String: *req.VisitRecordID, Valid: true}
-		existing.VisitRecordID = sql.NullString{String: *req.VisitRecordID, Valid: true}
+		updates["visit_record_id"] = spanner.NullString{StringVal: *req.VisitRecordID, Valid: true}
+		existing.VisitRecordID = spanner.NullString{StringVal: *req.VisitRecordID, Valid: true}
 	}
 
 	if len(updates) == 0 {
@@ -276,7 +285,7 @@ func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, o
 
 // Delete deletes a clinical observation
 func (r *ClinicalObservationRepository) Delete(ctx context.Context, patientID, observationID string) error {
-	mutation := spanner.Delete("clinical_observations", spanner.Key{patientID, observationID})
+	mutation := spanner.Delete("clinical_observations", spanner.Key{observationID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -288,20 +297,19 @@ func (r *ClinicalObservationRepository) Delete(ctx context.Context, patientID, o
 
 // GetLatestByCategory retrieves the latest observation for a given category
 func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context, patientID, category string) (*models.ClinicalObservation, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
-			performer_id, device_id, visit_record_id
+	stmt := NewStatement(`SELECT
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND category = @category
 		ORDER BY effective_datetime DESC, issued DESC
 		LIMIT 1`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"category":   category,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -319,24 +327,23 @@ func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context,
 
 // GetTimeSeriesData retrieves time series observation data for trend analysis
 func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, patientID, category string, from, to time.Time) ([]*models.ClinicalObservation, error) {
-	stmt := spanner.Statement{
-		SQL: `SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
-			performer_id, device_id, visit_record_id
+	stmt := NewStatement(`SELECT
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		WHERE patient_id = @patient_id
 		  AND category = @category
 		  AND effective_datetime >= @from
 		  AND effective_datetime <= @to
 		ORDER BY effective_datetime ASC`,
-		Params: map[string]interface{}{
+		map[string]interface{}{
 			"patient_id": patientID,
 			"category":   category,
 			"from":       from,
 			"to":         to,
-		},
-	}
+		})
 
 	iter := r.spannerRepo.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
@@ -364,7 +371,7 @@ func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, p
 // scanClinicalObservation scans a Spanner row into a ClinicalObservation model
 func scanClinicalObservation(row *spanner.Row) (*models.ClinicalObservation, error) {
 	var observation models.ClinicalObservation
-	var codeStr, valueStr sql.NullString
+	var codeStr, valueStr spanner.NullString
 
 	err := row.Columns(
 		&observation.ObservationID,
@@ -378,6 +385,10 @@ func scanClinicalObservation(row *spanner.Row) (*models.ClinicalObservation, err
 		&observation.PerformerID,
 		&observation.DeviceID,
 		&observation.VisitRecordID,
+		&observation.CreatedAt,
+		&observation.CreatedBy,
+		&observation.UpdatedAt,
+		&observation.UpdatedBy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan clinical observation: %w", err)
@@ -385,10 +396,10 @@ func scanClinicalObservation(row *spanner.Row) (*models.ClinicalObservation, err
 
 	// Convert JSONB strings back to json.RawMessage
 	if codeStr.Valid {
-		observation.Code = json.RawMessage(codeStr.String)
+		observation.Code = json.RawMessage(codeStr.StringVal)
 	}
 	if valueStr.Valid {
-		observation.Value = json.RawMessage(valueStr.String)
+		observation.Value = json.RawMessage(valueStr.StringVal)
 	}
 
 	return &observation, nil
