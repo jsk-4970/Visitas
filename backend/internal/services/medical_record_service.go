@@ -117,8 +117,14 @@ func (s *MedicalRecordService) CreateRecord(ctx context.Context, patientID strin
 
 	// If using a template, increment usage count
 	if req.TemplateID != nil {
+		templateID := *req.TemplateID
 		go func() {
-			_ = s.templateRepo.IncrementUsageCount(context.Background(), *req.TemplateID)
+			if err := s.templateRepo.IncrementUsageCount(context.Background(), templateID); err != nil {
+				logger.Error("Failed to increment template usage count", err, map[string]interface{}{
+					"template_id": templateID,
+					"record_id":   record.RecordID,
+				})
+			}
 		}()
 	}
 
@@ -479,8 +485,14 @@ func (s *MedicalRecordService) CreateFromTemplate(ctx context.Context, patientID
 	}
 
 	// Increment template usage count
+	templateID := req.TemplateID
 	go func() {
-		_ = s.templateRepo.IncrementUsageCount(context.Background(), req.TemplateID)
+		if err := s.templateRepo.IncrementUsageCount(context.Background(), templateID); err != nil {
+			logger.Error("Failed to increment template usage count", err, map[string]interface{}{
+				"template_id": templateID,
+				"record_id":   record.RecordID,
+			})
+		}
 	}()
 
 	logger.InfoContext(ctx, "Medical record created from template successfully", map[string]interface{}{

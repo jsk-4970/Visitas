@@ -36,11 +36,11 @@ func (r *IdentifierRepository) CreateIdentifier(ctx context.Context, req *models
 	var err error
 
 	if req.IdentifierType == string(models.IdentifierTypeMyNumber) {
-		// Encrypt the My Number
+		// Encrypt the My Number with patient-specific AAD
 		if r.encryptor == nil {
 			return nil, fmt.Errorf("KMS encryptor not configured for My Number encryption")
 		}
-		identifierValue, err = r.encryptor.EncryptMyNumber(ctx, req.IdentifierValue)
+		identifierValue, err = r.encryptor.EncryptMyNumberWithPatient(ctx, req.IdentifierValue, req.PatientID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt My Number: %w", err)
 		}
@@ -118,7 +118,7 @@ func (r *IdentifierRepository) GetIdentifierByID(ctx context.Context, identifier
 		if r.encryptor == nil {
 			return nil, fmt.Errorf("KMS encryptor not configured for My Number decryption")
 		}
-		decryptedValue, err := r.encryptor.DecryptMyNumber(ctx, identifier.IdentifierValue)
+		decryptedValue, err := r.encryptor.DecryptMyNumberWithPatient(ctx, identifier.IdentifierValue, identifier.PatientID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt My Number: %w", err)
 		}
@@ -166,7 +166,7 @@ func (r *IdentifierRepository) GetIdentifiersByPatientID(ctx context.Context, pa
 			if r.encryptor == nil {
 				return nil, fmt.Errorf("KMS encryptor not configured for My Number decryption")
 			}
-			decryptedValue, err := r.encryptor.DecryptMyNumber(ctx, identifier.IdentifierValue)
+			decryptedValue, err := r.encryptor.DecryptMyNumberWithPatient(ctx, identifier.IdentifierValue, patientID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decrypt My Number: %w", err)
 			}
@@ -202,7 +202,7 @@ func (r *IdentifierRepository) UpdateIdentifier(ctx context.Context, identifierI
 			if r.encryptor == nil {
 				return nil, fmt.Errorf("KMS encryptor not configured for My Number encryption")
 			}
-			encryptedValue, err := r.encryptor.EncryptMyNumber(ctx, identifierValue)
+			encryptedValue, err := r.encryptor.EncryptMyNumberWithPatient(ctx, identifierValue, currentIdentifier.PatientID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encrypt My Number: %w", err)
 			}
@@ -316,7 +316,7 @@ func (r *IdentifierRepository) GetPrimaryIdentifier(ctx context.Context, patient
 		if r.encryptor == nil {
 			return nil, fmt.Errorf("KMS encryptor not configured for My Number decryption")
 		}
-		decryptedValue, err := r.encryptor.DecryptMyNumber(ctx, identifier.IdentifierValue)
+		decryptedValue, err := r.encryptor.DecryptMyNumberWithPatient(ctx, identifier.IdentifierValue, patientID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt My Number: %w", err)
 		}

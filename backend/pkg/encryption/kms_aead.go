@@ -46,13 +46,21 @@ func (e *KMSEncryptor) Close() error {
 
 // EncryptMyNumber encrypts a My Number using KMS AEAD
 // Returns base64-encoded ciphertext
+// Deprecated: Use EncryptMyNumberWithPatient for better security
 func (e *KMSEncryptor) EncryptMyNumber(ctx context.Context, plaintext string) (string, error) {
+	return e.EncryptMyNumberWithPatient(ctx, plaintext, "")
+}
+
+// EncryptMyNumberWithPatient encrypts a My Number using KMS AEAD with patient-specific AAD
+// Returns base64-encoded ciphertext
+func (e *KMSEncryptor) EncryptMyNumberWithPatient(ctx context.Context, plaintext, patientID string) (string, error) {
 	if plaintext == "" {
 		return "", fmt.Errorf("plaintext cannot be empty")
 	}
 
 	// Additional Authenticated Data (AAD) for My Number
-	aad := []byte("mynumber")
+	// Include patient ID for stronger security binding
+	aad := buildMyNumberAAD(patientID)
 
 	req := &kmspb.EncryptRequest{
 		Name:                        e.keyName,
@@ -73,7 +81,14 @@ func (e *KMSEncryptor) EncryptMyNumber(ctx context.Context, plaintext string) (s
 
 // DecryptMyNumber decrypts a My Number using KMS AEAD
 // Expects base64-encoded ciphertext
+// Deprecated: Use DecryptMyNumberWithPatient for better security
 func (e *KMSEncryptor) DecryptMyNumber(ctx context.Context, ciphertextBase64 string) (string, error) {
+	return e.DecryptMyNumberWithPatient(ctx, ciphertextBase64, "")
+}
+
+// DecryptMyNumberWithPatient decrypts a My Number using KMS AEAD with patient-specific AAD
+// Expects base64-encoded ciphertext
+func (e *KMSEncryptor) DecryptMyNumberWithPatient(ctx context.Context, ciphertextBase64, patientID string) (string, error) {
 	if ciphertextBase64 == "" {
 		return "", fmt.Errorf("ciphertext cannot be empty")
 	}
@@ -85,7 +100,7 @@ func (e *KMSEncryptor) DecryptMyNumber(ctx context.Context, ciphertextBase64 str
 	}
 
 	// Additional Authenticated Data (AAD) must match encryption
-	aad := []byte("mynumber")
+	aad := buildMyNumberAAD(patientID)
 
 	req := &kmspb.DecryptRequest{
 		Name:                        e.keyName,
@@ -99,6 +114,17 @@ func (e *KMSEncryptor) DecryptMyNumber(ctx context.Context, ciphertextBase64 str
 	}
 
 	return string(result.Plaintext), nil
+}
+
+// buildMyNumberAAD builds the Additional Authenticated Data for My Number encryption
+// This binds the ciphertext to the patient, preventing copy attacks
+func buildMyNumberAAD(patientID string) []byte {
+	if patientID == "" {
+		// Fallback for backward compatibility
+		return []byte("mynumber")
+	}
+	// Format: "mynumber:patient_id:{uuid}"
+	return []byte("mynumber:patient_id:" + patientID)
 }
 
 // Encrypt encrypts data with optional AAD

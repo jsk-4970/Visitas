@@ -55,6 +55,10 @@ tags:
     description: 処方オーダー管理 (Phase 1, FHIR準拠)
   - name: ACP Records
     description: ACP (事前ケア計画) 記録管理 (Phase 1)
+  - name: Medical Records
+    description: カルテ（診療録）管理 (Phase 1 Sprint 6)
+  - name: Medical Record Templates
+    description: カルテテンプレート管理 (Phase 1 Sprint 6)
   - name: Health
     description: ヘルスチェック
 
@@ -321,7 +325,7 @@ paths:
         - Social Profiles
       summary: 社会的背景削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   /patients/{patientId}/coverages:
@@ -422,7 +426,7 @@ paths:
         - Coverages
       summary: 保険情報削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   /patients/{patientId}/conditions:
@@ -518,7 +522,7 @@ paths:
         - Medical Conditions
       summary: 病名削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   /patients/{patientId}/allergies:
@@ -619,7 +623,7 @@ paths:
         - Allergy Intolerances
       summary: アレルギー情報削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   # Patient Identifiers (Phase 1 - Implemented)
@@ -730,7 +734,7 @@ paths:
         - Patient Identifiers
       summary: 患者識別子削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   # Visit Schedules (Phase 1 - Implemented)
@@ -806,7 +810,7 @@ paths:
         - Visit Schedules
       summary: 訪問スケジュール削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   # Clinical Observations (Phase 1 - Implemented)
@@ -882,7 +886,7 @@ paths:
         - Clinical Observations
       summary: バイタル・ADL評価削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   # Care Plans (Phase 1 - Implemented)
@@ -958,7 +962,7 @@ paths:
         - Care Plans
       summary: ケア計画削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   # Medication Orders (Phase 1 - Implemented)
@@ -1034,7 +1038,7 @@ paths:
         - Medication Orders
       summary: 処方オーダー削除
       responses:
-        '200':
+        '204':
           description: 削除成功
 
   # ACP Records (Phase 1 - Implemented)
@@ -1110,8 +1114,373 @@ paths:
         - ACP Records
       summary: ACP記録削除
       responses:
-        '200':
+        '204':
           description: 削除成功
+
+  # Medical Records (Phase 1 Sprint 6 - Implemented)
+  /patients/{patientId}/medical-records:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Medical Records
+      summary: カルテ一覧取得
+      description: 患者のカルテ（診療録）一覧を取得します
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, in_progress, completed, cancelled]
+        - name: visit_type
+          in: query
+          schema:
+            type: string
+            enum: [regular, emergency, initial, follow_up, terminal_care]
+        - name: visit_date_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: visit_date_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+
+    post:
+      tags:
+        - Medical Records
+      summary: カルテ作成
+      description: 新規カルテを作成します
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /patients/{patientId}/medical-records/latest:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    get:
+      tags:
+        - Medical Records
+      summary: 最新カルテ取得
+      description: 患者の最新カルテを取得します
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+
+  /patients/{patientId}/medical-records/from-template:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+
+    post:
+      tags:
+        - Medical Records
+      summary: テンプレートからカルテ作成
+      description: 指定したテンプレートを基にカルテを作成します
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFromTemplateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+
+  /patients/{patientId}/medical-records/{recordId}:
+    parameters:
+      - $ref: '#/components/parameters/PatientId'
+      - name: recordId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: カルテID
+
+    get:
+      tags:
+        - Medical Records
+      summary: カルテ詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Medical Records
+      summary: カルテ更新
+      description: |
+        カルテを更新します。楽観的ロックを使用する場合は`expected_version`を指定してください。
+        バージョン不一致の場合は409 Conflictを返します。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags:
+        - Medical Records
+      summary: カルテ削除（論理削除）
+      responses:
+        '204':
+          description: 削除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /medical-records/{recordId}/copy:
+    parameters:
+      - name: recordId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags:
+        - Medical Records
+      summary: カルテコピー
+      description: 既存カルテをコピーして新規カルテを作成します
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopyAsMedicalRecordRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+
+  /medical-records/drafts:
+    get:
+      tags:
+        - Medical Records
+      summary: 下書きカルテ一覧取得
+      description: 自分が作成中の下書き・進行中カルテを取得します
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+
+  # Medical Record Templates (Phase 1 Sprint 6 - Implemented)
+  /medical-record-templates:
+    get:
+      tags:
+        - Medical Record Templates
+      summary: テンプレート一覧取得
+      parameters:
+        - name: specialty
+          in: query
+          schema:
+            type: string
+        - name: is_system
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecordTemplate'
+
+    post:
+      tags:
+        - Medical Record Templates
+      summary: テンプレート作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordTemplateCreateRequest'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordTemplate'
+
+  /medical-record-templates/system:
+    get:
+      tags:
+        - Medical Record Templates
+      summary: システムテンプレート一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecordTemplate'
+
+  /medical-record-templates/specialty/{specialty}:
+    parameters:
+      - name: specialty
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Medical Record Templates
+      summary: 診療科別テンプレート取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecordTemplate'
+
+  /medical-record-templates/{templateId}:
+    parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags:
+        - Medical Record Templates
+      summary: テンプレート詳細取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Medical Record Templates
+      summary: テンプレート更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecordTemplateUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecordTemplate'
+
+    delete:
+      tags:
+        - Medical Record Templates
+      summary: テンプレート削除
+      responses:
+        '204':
+          description: 削除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
 
 components:
   securitySchemes:
@@ -1909,6 +2278,284 @@ components:
         clinical_notes:
           type: string
 
+    MedicalRecord:
+      type: object
+      required:
+        - record_id
+        - patient_id
+        - visit_started_at
+        - visit_type
+        - performed_by
+        - status
+        - source_type
+      properties:
+        record_id:
+          type: string
+          format: uuid
+          description: カルテID
+        patient_id:
+          type: string
+          format: uuid
+          description: 患者ID
+        visit_started_at:
+          type: string
+          format: date-time
+          description: 診療開始日時
+        visit_ended_at:
+          type: string
+          format: date-time
+          description: 診療終了日時
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial, follow_up, terminal_care]
+          description: |
+            訪問種別
+            - regular: 定期訪問
+            - emergency: 緊急訪問
+            - initial: 初診
+            - follow_up: 再診
+            - terminal_care: 終末期ケア
+        performed_by:
+          type: string
+          description: 診療担当者ID
+        status:
+          type: string
+          enum: [draft, in_progress, completed, cancelled]
+          description: ステータス
+        schedule_id:
+          type: string
+          format: uuid
+          description: 関連スケジュールID
+        soap_content:
+          type: object
+          description: |
+            SOAP形式のカルテ内容（JSONB）
+            - subjective: 主観的情報（患者の訴え）
+            - objective: 客観的情報（バイタル、所見）
+            - assessment: 評価（診断）
+            - plan: 計画（治療方針）
+        template_id:
+          type: string
+          format: uuid
+          description: 使用したテンプレートID
+        source_record_id:
+          type: string
+          format: uuid
+          description: コピー元カルテID
+        source_type:
+          type: string
+          enum: [manual, voice_to_text, ai_generated, template]
+          description: 作成方法
+        audio_file_url:
+          type: string
+          description: 音声ファイルURL（音声入力の場合）
+        soap_completed:
+          type: boolean
+          description: SOAP入力完了フラグ
+        has_ai_assistance:
+          type: boolean
+          description: AI支援使用フラグ
+        version:
+          type: integer
+          description: 楽観的ロック用バージョン番号
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+        deleted:
+          type: boolean
+        deleted_at:
+          type: string
+          format: date-time
+        deleted_by:
+          type: string
+
+    MedicalRecordCreateRequest:
+      type: object
+      required:
+        - visit_started_at
+        - visit_type
+        - performed_by
+        - status
+        - source_type
+      properties:
+        visit_started_at:
+          type: string
+          format: date-time
+        visit_ended_at:
+          type: string
+          format: date-time
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial, follow_up, terminal_care]
+        performed_by:
+          type: string
+        status:
+          type: string
+          enum: [draft, in_progress, completed, cancelled]
+        schedule_id:
+          type: string
+          format: uuid
+        soap_content:
+          type: object
+        template_id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+          enum: [manual, voice_to_text, ai_generated, template]
+        audio_file_url:
+          type: string
+
+    MedicalRecordUpdateRequest:
+      type: object
+      properties:
+        visit_ended_at:
+          type: string
+          format: date-time
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial, follow_up, terminal_care]
+        status:
+          type: string
+          enum: [draft, in_progress, completed, cancelled]
+        soap_content:
+          type: object
+        schedule_id:
+          type: string
+          format: uuid
+        template_id:
+          type: string
+          format: uuid
+        audio_file_url:
+          type: string
+        expected_version:
+          type: integer
+          description: 楽観的ロック用。現在のバージョン番号を指定
+
+    CreateFromTemplateRequest:
+      type: object
+      required:
+        - template_id
+        - visit_started_at
+        - visit_type
+        - performed_by
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        visit_started_at:
+          type: string
+          format: date-time
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial, follow_up, terminal_care]
+        performed_by:
+          type: string
+        initial_soap:
+          type: object
+          description: 初期SOAP内容（テンプレートとマージ）
+
+    CopyAsMedicalRecordRequest:
+      type: object
+      required:
+        - target_patient_id
+        - visit_started_at
+        - visit_type
+        - performed_by
+      properties:
+        target_patient_id:
+          type: string
+          format: uuid
+          description: コピー先患者ID
+        visit_started_at:
+          type: string
+          format: date-time
+        visit_type:
+          type: string
+          enum: [regular, emergency, initial, follow_up, terminal_care]
+        performed_by:
+          type: string
+        modify_soap:
+          type: object
+          description: SOAP内容の変更（コピー元とマージ）
+
+    MedicalRecordTemplate:
+      type: object
+      required:
+        - template_id
+        - template_name
+        - soap_template
+        - is_system_template
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        template_name:
+          type: string
+          description: テンプレート名
+        template_description:
+          type: string
+          description: テンプレートの説明
+        specialty:
+          type: string
+          description: 診療科（general, internal_medicine, neurology等）
+        soap_template:
+          type: object
+          description: SOAP形式のテンプレート内容
+        is_system_template:
+          type: boolean
+          description: システム提供テンプレートかどうか
+        usage_count:
+          type: integer
+          description: 使用回数
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted:
+          type: boolean
+
+    MedicalRecordTemplateCreateRequest:
+      type: object
+      required:
+        - template_name
+        - soap_template
+      properties:
+        template_name:
+          type: string
+        template_description:
+          type: string
+        specialty:
+          type: string
+        soap_template:
+          type: object
+        is_system_template:
+          type: boolean
+          default: false
+
+    MedicalRecordTemplateUpdateRequest:
+      type: object
+      properties:
+        template_name:
+          type: string
+        template_description:
+          type: string
+        specialty:
+          type: string
+        soap_template:
+          type: object
+
     Error:
       type: object
       required:
@@ -1952,6 +2599,26 @@ components:
           example:
             error: not_found
             message: Resource not found
+
+    Conflict:
+      description: コンフリクト（楽観的ロック失敗等）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: conflict
+            message: Resource was modified by another user. Please refresh and try again.
+
+    TooManyRequests:
+      description: レート制限超過
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: rate_limit_exceeded
+            message: Too many requests. Please try again later.
 
     InternalServerError:
       description: サーバーエラー

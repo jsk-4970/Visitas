@@ -142,12 +142,17 @@ func main() {
 	// Setup router
 	r := chi.NewRouter()
 
+	// Initialize rate limiter
+	rateLimiter := middleware.NewRateLimiterMiddleware(nil) // Uses default config: 1000 req/hour
+	defer rateLimiter.Stop()
+
 	// Middleware
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
+	r.Use(rateLimiter.Limit) // Apply rate limiting
 
 	// CORS
 	r.Use(cors.Handler(cors.Options{

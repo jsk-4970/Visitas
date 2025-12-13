@@ -50,7 +50,14 @@
       "Bash(git commit:*)",
       "Bash(cd:*)",
       "Bash(go vet:*)",
-      "Bash(cut:*)"
+      "Bash(cut:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh api:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(sh:*)",
+      "Bash(go install:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(git push:*)"
     ]
   }
 }
