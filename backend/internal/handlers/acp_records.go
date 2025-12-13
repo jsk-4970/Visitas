@@ -61,7 +61,9 @@ func (h *ACPRecordHandler) CreateACPRecord(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(record)
+	if err := json.NewEncoder(w).Encode(record); err != nil {
+		logger.Error("Failed to encode response", err)
+	}
 }
 
 // GetACPRecord handles GET /patients/{patient_id}/acp-records/{id}
@@ -89,7 +91,9 @@ func (h *ACPRecordHandler) GetACPRecord(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(record)
+	if err := json.NewEncoder(w).Encode(record); err != nil {
+		logger.Error("Failed to encode response", err)
+	}
 }
 
 // GetACPRecords handles GET /patients/{patient_id}/acp-records
@@ -171,7 +175,9 @@ func (h *ACPRecordHandler) GetACPRecords(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(records)
+	if err := json.NewEncoder(w).Encode(records); err != nil {
+		logger.Error("Failed to encode response", err)
+	}
 }
 
 // UpdateACPRecord handles PUT /patients/{patient_id}/acp-records/{id}

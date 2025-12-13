@@ -50,6 +50,19 @@ jobs:
       run:
         working-directory: ./backend
 
+    services:
+      spanner:
+        image: gcr.io/cloud-spanner-emulator/emulator:latest
+        ports:
+          - 9010:9010
+          - 9020:9020
+
+    env:
+      SPANNER_EMULATOR_HOST: localhost:9010
+      GCP_PROJECT_ID: test-project
+      SPANNER_INSTANCE: test-instance
+      SPANNER_DATABASE: test-database
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,6 +75,47 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Wait for Spanner Emulator
+        run: |
+          echo "Waiting for Spanner Emulator to be ready..."
+          for i in {1..30}; do
+            if nc -z localhost 9010; then
+              echo "Spanner Emulator is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+
+      - name: Setup Spanner Emulator Database
+        run: |
+          # Install gcloud CLI
+          curl -sSL https://sdk.cloud.google.com | bash -s -- --disable-prompts
+          source ~/google-cloud-sdk/path.bash.inc
+
+          # Configure gcloud for emulator
+          gcloud config configurations create emulator
+          gcloud config set auth/disable_credentials true
+          gcloud config set project test-project
+          gcloud config set api_endpoint_overrides/spanner http://localhost:9020/
+
+          # Create instance and database
+          gcloud spanner instances create test-instance \
+            --config=emulator-config \
+            --description="Test Instance" \
+            --nodes=1
+
+          gcloud spanner databases create test-database \
+            --instance=test-instance
+
+          # Apply migrations
+          for migration in $(ls -1 migrations/*.sql | sort); do
+            echo "Applying migration: $migration"
+            gcloud spanner databases ddl update test-database \
+              --instance=test-instance \
+              --ddl="$(cat $migration)" || true
+          done
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
