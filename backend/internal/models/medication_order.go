@@ -31,6 +31,12 @@ type MedicationOrder struct {
 
 	// Optimistic Locking
 	Version int64 `json:"version"`
+
+	// Audit fields for medical compliance (3省2ガイドライン)
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy spanner.NullString `json:"created_by,omitempty"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	UpdatedBy spanner.NullString `json:"updated_by,omitempty"`
 }
 
 // MedicationOrderCreateRequest represents the request body for creating a medication order

@@ -93,7 +93,7 @@ func (s *ClinicalObservationService) CreateClinicalObservation(ctx context.Conte
 		return nil, fmt.Errorf("effective_datetime is required")
 	}
 
-	observation, err := s.clinicalObservationRepo.Create(ctx, patientID, req)
+	observation, err := s.clinicalObservationRepo.Create(ctx, patientID, req, createdBy)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to create clinical observation", err, map[string]interface{}{
 			"patient_id": patientID,
@@ -216,7 +216,7 @@ func (s *ClinicalObservationService) UpdateClinicalObservation(ctx context.Conte
 		}
 	}
 
-	observation, err := s.clinicalObservationRepo.Update(ctx, patientID, observationID, req)
+	observation, err := s.clinicalObservationRepo.Update(ctx, patientID, observationID, req, updatedBy)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to update clinical observation", err, map[string]interface{}{
 			"patient_id":     patientID,

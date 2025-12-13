@@ -25,6 +25,12 @@ type ClinicalObservation struct {
 
 	// Reference to visit record
 	VisitRecordID spanner.NullString `json:"visit_record_id,omitempty"`
+
+	// Audit fields for medical compliance (3省2ガイドライン)
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy string             `json:"created_by"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	UpdatedBy spanner.NullString `json:"updated_by,omitempty"`
 }
 
 // ClinicalObservationCreateRequest represents the request body for creating a clinical observation

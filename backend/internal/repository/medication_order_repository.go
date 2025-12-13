@@ -26,8 +26,9 @@ func NewMedicationOrderRepository(spannerRepo *SpannerRepository) *MedicationOrd
 }
 
 // Create creates a new medication order
-func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string, req *models.MedicationOrderCreateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string, req *models.MedicationOrderCreateRequest, createdBy string) (*models.MedicationOrder, error) {
 	orderID := uuid.New().String()
+	now := time.Now()
 
 	order := &models.MedicationOrder{
 		OrderID:           orderID,
@@ -40,6 +41,9 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 		PrescribedBy:      req.PrescribedBy,
 		DispensePharmacy:  req.DispensePharmacy,
 		Version:           1,
+		CreatedAt:         now,
+		CreatedBy:         spanner.NullString{StringVal: createdBy, Valid: true},
+		UpdatedAt:         now,
 	}
 
 	if req.ReasonReference != nil {
@@ -61,12 +65,14 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 			"medication", "dosage_instruction",
 			"prescribed_date", "prescribed_by",
 			"dispense_pharmacy", "reason_reference", "version",
+			"created_at", "created_by", "updated_at",
 		},
 		[]interface{}{
 			orderID, patientID, req.Status, req.Intent,
 			medicationStr, dosageInstructionStr,
 			req.PrescribedDate, req.PrescribedBy,
 			dispensePharmacyStr, order.ReasonReference, 1,
+			now, spanner.NullString{StringVal: createdBy, Valid: true}, now,
 		},
 	)
 
@@ -84,7 +90,8 @@ func (r *MedicationOrderRepository) GetByID(ctx context.Context, patientID, orde
 			order_id, patient_id, status, intent,
 			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy::text, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND order_id = @order_id`,
 		map[string]interface{}{
@@ -168,7 +175,8 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 			order_id, patient_id, status, intent,
 			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy::text, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		%s
 		ORDER BY prescribed_date DESC
@@ -199,15 +207,21 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 }
 
 // Update updates a medication order
-func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, orderID string, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, orderID string, req *models.MedicationOrderUpdateRequest, updatedBy string) (*models.MedicationOrder, error) {
 	// First, get the existing order
 	existing, err := r.GetByID(ctx, patientID, orderID)
 	if err != nil {
 		return nil, err
 	}
 
+	now := time.Now()
+
 	// Build update map
 	updates := make(map[string]interface{})
+	updates["updated_at"] = now
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
+	existing.UpdatedAt = now
+	existing.UpdatedBy = spanner.NullString{StringVal: updatedBy, Valid: true}
 
 	if req.Status != nil {
 		updates["status"] = *req.Status
@@ -277,7 +291,7 @@ func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, order
 }
 
 // UpdateWithVersion updates a medication order with optimistic locking
-func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int64, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int64, req *models.MedicationOrderUpdateRequest, updatedBy string) (*models.MedicationOrder, error) {
 	// First, get the existing order
 	existing, err := r.GetByID(ctx, patientID, orderID)
 	if err != nil {
@@ -289,8 +303,14 @@ func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patie
 		return nil, fmt.Errorf("CONFLICT: Medication order was modified by another user. Expected version %d but found %d", expectedVersion, existing.Version)
 	}
 
+	now := time.Now()
+
 	// Build update map
 	updates := make(map[string]interface{})
+	updates["updated_at"] = now
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
+	existing.UpdatedAt = now
+	existing.UpdatedBy = spanner.NullString{StringVal: updatedBy, Valid: true}
 
 	if req.Status != nil {
 		updates["status"] = *req.Status
@@ -377,7 +397,8 @@ func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patient
 			order_id, patient_id, status, intent,
 			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy::text, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY prescribed_date DESC`,
@@ -414,7 +435,8 @@ func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context,
 			order_id, patient_id, status, intent,
 			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy::text, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version,
+			created_at, created_by, updated_at, updated_by
 		FROM medication_orders
 		WHERE patient_id = @patient_id
 		  AND prescribed_by = @prescribed_by
@@ -467,6 +489,10 @@ func scanMedicationOrder(row *spanner.Row) (*models.MedicationOrder, error) {
 		&dispensePharmacyStr,
 		&order.ReasonReference,
 		&order.Version,
+		&order.CreatedAt,
+		&order.CreatedBy,
+		&order.UpdatedAt,
+		&order.UpdatedBy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan medication order: %w", err)

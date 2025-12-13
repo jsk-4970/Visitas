@@ -97,7 +97,7 @@ func (s *MedicationOrderService) CreateMedicationOrder(ctx context.Context, pati
 		return nil, fmt.Errorf("prescribed_date is required")
 	}
 
-	order, err := s.medicationOrderRepo.Create(ctx, patientID, req)
+	order, err := s.medicationOrderRepo.Create(ctx, patientID, req, createdBy)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to create medication order", err, map[string]interface{}{
 			"patient_id": patientID,
@@ -272,9 +272,9 @@ func (s *MedicationOrderService) UpdateMedicationOrder(ctx context.Context, pati
 
 	var order *models.MedicationOrder
 	if req.ExpectedVersion != nil {
-		order, err = s.medicationOrderRepo.UpdateWithVersion(ctx, patientID, orderID, *req.ExpectedVersion, req)
+		order, err = s.medicationOrderRepo.UpdateWithVersion(ctx, patientID, orderID, *req.ExpectedVersion, req, updatedBy)
 	} else {
-		order, err = s.medicationOrderRepo.Update(ctx, patientID, orderID, req)
+		order, err = s.medicationOrderRepo.Update(ctx, patientID, orderID, req, updatedBy)
 	}
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to update medication order", err, map[string]interface{}{

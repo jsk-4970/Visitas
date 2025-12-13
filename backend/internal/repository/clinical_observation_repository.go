@@ -26,7 +26,7 @@ func NewClinicalObservationRepository(spannerRepo *SpannerRepository) *ClinicalO
 }
 
 // Create creates a new clinical observation
-func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID string, req *models.ClinicalObservationCreateRequest) (*models.ClinicalObservation, error) {
+func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID string, req *models.ClinicalObservationCreateRequest, createdBy string) (*models.ClinicalObservation, error) {
 	observationID := uuid.New().String()
 	now := time.Now()
 
@@ -38,6 +38,9 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 		EffectiveDatetime: req.EffectiveDatetime,
 		Issued:            now,
 		Value:             req.Value,
+		CreatedAt:         now,
+		CreatedBy:         createdBy,
+		UpdatedAt:         now,
 	}
 
 	if req.Interpretation != nil {
@@ -62,11 +65,13 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 			"observation_id", "patient_id", "category", "code",
 			"effective_datetime", "issued", "value", "interpretation",
 			"performer_id", "device_id", "visit_record_id",
+			"created_at", "created_by", "updated_at",
 		},
 		[]interface{}{
 			observationID, patientID, req.Category, codeStr,
 			req.EffectiveDatetime, now, valueStr, observation.Interpretation,
 			observation.PerformerID, observation.DeviceID, observation.VisitRecordID,
+			now, createdBy, now,
 		},
 	)
 
@@ -83,7 +88,8 @@ func (r *ClinicalObservationRepository) GetByID(ctx context.Context, patientID, 
 	stmt := NewStatement(`SELECT
 			observation_id, patient_id, category, code::text,
 			effective_datetime, issued, value::text, interpretation,
-			performer_id, device_id, visit_record_id
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND observation_id = @observation_id`,
 		map[string]interface{}{
@@ -166,7 +172,8 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 	stmt := NewStatement(fmt.Sprintf(`SELECT
 			observation_id, patient_id, category, code::text,
 			effective_datetime, issued, value::text, interpretation,
-			performer_id, device_id, visit_record_id
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		%s
 		ORDER BY effective_datetime DESC, issued DESC
@@ -197,15 +204,21 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 }
 
 // Update updates a clinical observation
-func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, observationID string, req *models.ClinicalObservationUpdateRequest) (*models.ClinicalObservation, error) {
+func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, observationID string, req *models.ClinicalObservationUpdateRequest, updatedBy string) (*models.ClinicalObservation, error) {
 	// First, get the existing observation
 	existing, err := r.GetByID(ctx, patientID, observationID)
 	if err != nil {
 		return nil, err
 	}
 
+	now := time.Now()
+
 	// Build update map
 	updates := make(map[string]interface{})
+	updates["updated_at"] = now
+	updates["updated_by"] = spanner.NullString{StringVal: updatedBy, Valid: true}
+	existing.UpdatedAt = now
+	existing.UpdatedBy = spanner.NullString{StringVal: updatedBy, Valid: true}
 
 	if req.Category != nil {
 		updates["category"] = *req.Category
@@ -287,7 +300,8 @@ func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context,
 	stmt := NewStatement(`SELECT
 			observation_id, patient_id, category, code::text,
 			effective_datetime, issued, value::text, interpretation,
-			performer_id, device_id, visit_record_id
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND category = @category
 		ORDER BY effective_datetime DESC, issued DESC
@@ -316,7 +330,8 @@ func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, p
 	stmt := NewStatement(`SELECT
 			observation_id, patient_id, category, code::text,
 			effective_datetime, issued, value::text, interpretation,
-			performer_id, device_id, visit_record_id
+			performer_id, device_id, visit_record_id,
+			created_at, created_by, updated_at, updated_by
 		FROM clinical_observations
 		WHERE patient_id = @patient_id
 		  AND category = @category
@@ -370,6 +385,10 @@ func scanClinicalObservation(row *spanner.Row) (*models.ClinicalObservation, err
 		&observation.PerformerID,
 		&observation.DeviceID,
 		&observation.VisitRecordID,
+		&observation.CreatedAt,
+		&observation.CreatedBy,
+		&observation.UpdatedAt,
+		&observation.UpdatedBy,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan clinical observation: %w", err)
