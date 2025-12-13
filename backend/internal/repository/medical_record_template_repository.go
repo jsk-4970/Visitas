@@ -86,7 +86,7 @@ func (r *MedicalRecordTemplateRepository) Create(ctx context.Context, req *model
 func (r *MedicalRecordTemplateRepository) GetByID(ctx context.Context, templateID string) (*models.MedicalRecordTemplate, error) {
 	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
@@ -146,7 +146,7 @@ func (r *MedicalRecordTemplateRepository) List(ctx context.Context, filter *mode
 
 	stmt := NewStatement(fmt.Sprintf(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
@@ -311,7 +311,7 @@ func (r *MedicalRecordTemplateRepository) IncrementUsageCount(ctx context.Contex
 func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context) ([]*models.MedicalRecordTemplate, error) {
 	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates
@@ -346,7 +346,7 @@ func (r *MedicalRecordTemplateRepository) GetSystemTemplates(ctx context.Context
 func (r *MedicalRecordTemplateRepository) GetBySpecialty(ctx context.Context, specialty string) ([]*models.MedicalRecordTemplate, error) {
 	stmt := NewStatement(`SELECT
 			template_id, template_name, template_description, specialty,
-			soap_template, is_system_template, usage_count,
+			soap_template::text, is_system_template, usage_count,
 			created_at, created_by, updated_at, updated_by,
 			deleted, deleted_at
 		FROM medical_record_templates

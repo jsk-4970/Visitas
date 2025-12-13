@@ -1,9 +1,10 @@
 package models
 
 import (
-	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 // PatientSocialProfile represents a patient's social context and living situation
@@ -11,7 +12,7 @@ import (
 type PatientSocialProfile struct {
 	ProfileID      string          `json:"profile_id" spanner:"profile_id"`
 	PatientID      string          `json:"patient_id" spanner:"patient_id"`
-	ProfileVersion int             `json:"profile_version" spanner:"profile_version"`
+	ProfileVersion int64           `json:"profile_version" spanner:"profile_version"`
 	Content        json.RawMessage `json:"content" spanner:"content"` // JSONB
 
 	// Generated Columns (for fast queries)
@@ -19,13 +20,13 @@ type PatientSocialProfile struct {
 	RequiresCaregiverSupport   bool `json:"requires_caregiver_support" spanner:"requires_caregiver_support"`
 
 	// Validity Period
-	ValidFrom sql.NullTime `json:"valid_from" spanner:"valid_from"`
-	ValidTo   sql.NullTime `json:"valid_to,omitempty" spanner:"valid_to"`
+	ValidFrom spanner.NullTime `json:"valid_from" spanner:"valid_from"`
+	ValidTo   spanner.NullTime `json:"valid_to,omitempty" spanner:"valid_to"`
 
 	// Assessment Information
-	AssessedBy    string       `json:"assessed_by,omitempty" spanner:"assessed_by"`
-	AssessedAt    sql.NullTime `json:"assessed_at,omitempty" spanner:"assessed_at"`
-	AssessmentNotes string      `json:"assessment_notes,omitempty" spanner:"assessment_notes"`
+	AssessedBy      string           `json:"assessed_by,omitempty" spanner:"assessed_by"`
+	AssessedAt      spanner.NullTime `json:"assessed_at,omitempty" spanner:"assessed_at"`
+	AssessmentNotes string           `json:"assessment_notes,omitempty" spanner:"assessment_notes"`
 
 	// Audit Timestamps
 	CreatedAt time.Time `json:"created_at" spanner:"created_at"`
@@ -34,8 +35,8 @@ type PatientSocialProfile struct {
 	UpdatedBy string    `json:"updated_by,omitempty" spanner:"updated_by"`
 
 	// Soft Delete
-	Deleted   bool         `json:"deleted" spanner:"deleted"`
-	DeletedAt sql.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
+	Deleted   bool             `json:"deleted" spanner:"deleted"`
+	DeletedAt spanner.NullTime `json:"deleted_at,omitempty" spanner:"deleted_at"`
 }
 
 // SocialProfileContent represents the structured content of a social profile

@@ -30,7 +30,7 @@ type MedicationOrder struct {
 	ReasonReference    spanner.NullString  `json:"reason_reference,omitempty"`
 
 	// Optimistic Locking
-	Version int `json:"version"`
+	Version int64 `json:"version"`
 }
 
 // MedicationOrderCreateRequest represents the request body for creating a medication order
@@ -56,7 +56,7 @@ type MedicationOrderUpdateRequest struct {
 	DispensePharmacy   json.RawMessage `json:"dispense_pharmacy,omitempty"`
 	ReasonReference    *string         `json:"reason_reference,omitempty"`
 
-	ExpectedVersion    *int            `json:"expected_version,omitempty"` // Optimistic locking
+	ExpectedVersion    *int64          `json:"expected_version,omitempty"` // Optimistic locking
 }
 
 // MedicationOrderFilter represents filter options for listing medication orders

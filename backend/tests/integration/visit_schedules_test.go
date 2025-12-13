@@ -45,9 +45,9 @@ func TestVisitSchedule_Integration_CreateAndGet(t *testing.T) {
 		assert.NotEmpty(t, schedule.ScheduleID)
 		assert.Equal(t, patientID, schedule.PatientID)
 		assert.Equal(t, "regular", schedule.VisitType)
-		assert.Equal(t, 60, schedule.EstimatedDurationMinutes)
+		assert.Equal(t, int64(60), schedule.EstimatedDurationMinutes)
 		assert.Equal(t, "draft", schedule.Status)
-		assert.Equal(t, 5, schedule.PriorityScore)
+		assert.Equal(t, int64(5), schedule.PriorityScore)
 
 		// Test: Get the created schedule
 		t.Run("Get visit schedule by ID", func(t *testing.T) {
@@ -109,9 +109,9 @@ func TestVisitSchedule_Integration_Update(t *testing.T) {
 
 		assert.Equal(t, schedule.ScheduleID, updatedSchedule.ScheduleID)
 		assert.Equal(t, "emergency", updatedSchedule.VisitType)
-		assert.Equal(t, 90, updatedSchedule.EstimatedDurationMinutes)
+		assert.Equal(t, int64(90), updatedSchedule.EstimatedDurationMinutes)
 		assert.Equal(t, "assigned", updatedSchedule.Status)
-		assert.Equal(t, 10, updatedSchedule.PriorityScore)
+		assert.Equal(t, int64(10), updatedSchedule.PriorityScore)
 	})
 }
 
@@ -261,7 +261,7 @@ func TestVisitSchedule_Integration_AssignStaff(t *testing.T) {
 
 		assert.Equal(t, schedule.ScheduleID, updatedSchedule.ScheduleID)
 		assert.True(t, updatedSchedule.AssignedStaffID.Valid)
-		assert.Equal(t, "staff-123", updatedSchedule.AssignedStaffID.String)
+		assert.Equal(t, "staff-123", updatedSchedule.AssignedStaffID.StringVal)
 	})
 }
 
@@ -341,7 +341,7 @@ func TestVisitSchedule_Integration_Delete(t *testing.T) {
 	// Test: Delete the schedule
 	t.Run("Delete visit schedule", func(t *testing.T) {
 		deleteResp := ts.MakeRequest(t, http.MethodDelete, fmt.Sprintf("/api/v1/patients/%s/schedules/%s", patientID, schedule.ScheduleID), nil)
-		assert.Equal(t, http.StatusOK, deleteResp.StatusCode)
+		assert.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
 
 		// Verify the schedule is deleted (should return 404)
 		getResp := ts.MakeRequest(t, http.MethodGet, fmt.Sprintf("/api/v1/patients/%s/schedules/%s", patientID, schedule.ScheduleID), nil)

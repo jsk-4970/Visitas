@@ -4,20 +4,21 @@ import (
 	"encoding/json"
 	"time"
 
+	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 )
 
 // VisitSchedule represents a visit schedule for home healthcare
 type VisitSchedule struct {
-	ScheduleID   string    `json:"schedule_id"`
-	PatientID    string    `json:"patient_id"`
-	VisitDate    time.Time `json:"visit_date"`
-	VisitType    string    `json:"visit_type"` // "regular" | "emergency" | "initial_assessment" | "terminal_care"
+	ScheduleID   string     `json:"schedule_id"`
+	PatientID    string     `json:"patient_id"`
+	VisitDate    civil.Date `json:"visit_date"`
+	VisitType    string     `json:"visit_type"` // "regular" | "emergency" | "initial_assessment" | "terminal_care"
 
 	// Visit time window
-	TimeWindowStart        spanner.NullTime `json:"time_window_start,omitempty"`
-	TimeWindowEnd          spanner.NullTime `json:"time_window_end,omitempty"`
-	EstimatedDurationMinutes int        `json:"estimated_duration_minutes"`
+	TimeWindowStart          spanner.NullTime `json:"time_window_start,omitempty"`
+	TimeWindowEnd            spanner.NullTime `json:"time_window_end,omitempty"`
+	EstimatedDurationMinutes int64            `json:"estimated_duration_minutes"`
 
 	// Staff assignment
 	AssignedStaffID   spanner.NullString `json:"assigned_staff_id,omitempty"`
@@ -27,9 +28,9 @@ type VisitSchedule struct {
 	Status string `json:"status"` // "draft" | "optimized" | "assigned" | "in_progress" | "completed" | "cancelled"
 
 	// Route Optimization integration
-	PriorityScore       int             `json:"priority_score"`
-	Constraints         json.RawMessage `json:"constraints,omitempty"`         // JSONB - Google Maps API Shipment.VisitRequest equivalent
-	OptimizationResult  json.RawMessage `json:"optimization_result,omitempty"` // JSONB - API Response
+	PriorityScore      int64           `json:"priority_score"`
+	Constraints        json.RawMessage `json:"constraints,omitempty"`         // JSONB - Google Maps API Shipment.VisitRequest equivalent
+	OptimizationResult json.RawMessage `json:"optimization_result,omitempty"` // JSONB - API Response
 
 	// Link to care plan
 	CarePlanRef  spanner.NullString `json:"care_plan_ref,omitempty"`
@@ -45,11 +46,11 @@ type VisitScheduleCreateRequest struct {
 	VisitType                string          `json:"visit_type" validate:"required,oneof=regular emergency initial_assessment terminal_care"`
 	TimeWindowStart          *time.Time      `json:"time_window_start,omitempty"`
 	TimeWindowEnd            *time.Time      `json:"time_window_end,omitempty"`
-	EstimatedDurationMinutes int             `json:"estimated_duration_minutes" validate:"required,min=5,max=480"`
+	EstimatedDurationMinutes int64           `json:"estimated_duration_minutes" validate:"required,min=5,max=480"`
 	AssignedStaffID          *string         `json:"assigned_staff_id,omitempty"`
 	AssignedVehicleID        *string         `json:"assigned_vehicle_id,omitempty"`
 	Status                   string          `json:"status" validate:"required,oneof=draft optimized assigned in_progress completed cancelled"`
-	PriorityScore            int             `json:"priority_score" validate:"min=1,max=10"`
+	PriorityScore            int64           `json:"priority_score" validate:"min=1,max=10"`
 	Constraints              json.RawMessage `json:"constraints,omitempty"`
 	CarePlanRef              *string         `json:"care_plan_ref,omitempty"`
 	ActivityRef              *string         `json:"activity_ref,omitempty"`
@@ -61,11 +62,11 @@ type VisitScheduleUpdateRequest struct {
 	VisitType                *string         `json:"visit_type,omitempty" validate:"omitempty,oneof=regular emergency initial_assessment terminal_care"`
 	TimeWindowStart          *time.Time      `json:"time_window_start,omitempty"`
 	TimeWindowEnd            *time.Time      `json:"time_window_end,omitempty"`
-	EstimatedDurationMinutes *int            `json:"estimated_duration_minutes,omitempty" validate:"omitempty,min=5,max=480"`
+	EstimatedDurationMinutes *int64          `json:"estimated_duration_minutes,omitempty" validate:"omitempty,min=5,max=480"`
 	AssignedStaffID          *string         `json:"assigned_staff_id,omitempty"`
 	AssignedVehicleID        *string         `json:"assigned_vehicle_id,omitempty"`
 	Status                   *string         `json:"status,omitempty" validate:"omitempty,oneof=draft optimized assigned in_progress completed cancelled"`
-	PriorityScore            *int            `json:"priority_score,omitempty" validate:"omitempty,min=1,max=10"`
+	PriorityScore            *int64          `json:"priority_score,omitempty" validate:"omitempty,min=1,max=10"`
 	Constraints              json.RawMessage `json:"constraints,omitempty"`
 	OptimizationResult       json.RawMessage `json:"optimization_result,omitempty"`
 	CarePlanRef              *string         `json:"care_plan_ref,omitempty"`

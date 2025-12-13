@@ -31,7 +31,7 @@ func (r *ACPRecordRepository) Create(ctx context.Context, patientID string, req 
 	now := time.Now()
 
 	// Default version is 1 for new records
-	version := 1
+	var version int64 = 1
 
 	record := &models.ACPRecord{
 		ACPID:        acpID,
@@ -116,9 +116,9 @@ func (r *ACPRecordRepository) GetByID(ctx context.Context, patientID, acpID stri
 	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id AND acp_id = @acp_id`,
@@ -192,9 +192,9 @@ func (r *ACPRecordRepository) List(ctx context.Context, filter *models.ACPRecord
 	stmt := NewStatement(fmt.Sprintf(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		%s
@@ -326,9 +326,9 @@ func (r *ACPRecordRepository) GetLatestACP(ctx context.Context, patientID string
 	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id AND status = 'active'
@@ -357,9 +357,9 @@ func (r *ACPRecordRepository) GetACPHistory(ctx context.Context, patientID strin
 	stmt := NewStatement(`SELECT
 			acp_id, patient_id, recorded_date, version, status,
 			decision_maker, proxy_person_id,
-			directives, values_narrative,
-			legal_documents, discussion_log,
-			data_sensitivity, access_restricted_to,
+			directives::text, values_narrative,
+			legal_documents::text, discussion_log::text,
+			data_sensitivity, access_restricted_to::text,
 			created_by, created_at
 		FROM acp_records
 		WHERE patient_id = @patient_id

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	"github.com/google/uuid"
 	"github.com/visitas/backend/internal/models"
@@ -30,10 +31,13 @@ func (r *VisitScheduleRepository) Create(ctx context.Context, patientID string, 
 	scheduleID := uuid.New().String()
 	now := time.Now()
 
+	// Convert time.Time to civil.Date for Spanner DATE type
+	visitDate := civil.DateOf(req.VisitDate)
+
 	schedule := &models.VisitSchedule{
 		ScheduleID:               scheduleID,
 		PatientID:                patientID,
-		VisitDate:                req.VisitDate,
+		VisitDate:                visitDate,
 		VisitType:                req.VisitType,
 		EstimatedDurationMinutes: req.EstimatedDurationMinutes,
 		Status:                   req.Status,
@@ -78,7 +82,7 @@ func (r *VisitScheduleRepository) Create(ctx context.Context, patientID string, 
 			"created_at", "updated_at",
 		},
 		[]interface{}{
-			scheduleID, patientID, req.VisitDate, req.VisitType,
+			scheduleID, patientID, visitDate, req.VisitType,
 			schedule.TimeWindowStart, schedule.TimeWindowEnd, req.EstimatedDurationMinutes,
 			schedule.AssignedStaffID, schedule.AssignedVehicleID,
 			req.Status, req.PriorityScore, constraintsStr,
@@ -101,7 +105,7 @@ func (r *VisitScheduleRepository) GetByID(ctx context.Context, patientID, schedu
 			schedule_id, patient_id, visit_date, visit_type,
 			time_window_start, time_window_end, estimated_duration_minutes,
 			assigned_staff_id, assigned_vehicle_id,
-			status, priority_score, constraints, optimization_result,
+			status, priority_score, constraints::text, optimization_result::text,
 			care_plan_ref, activity_ref,
 			created_at, updated_at
 		FROM visit_schedules
@@ -192,7 +196,7 @@ func (r *VisitScheduleRepository) List(ctx context.Context, filter *models.Visit
 			schedule_id, patient_id, visit_date, visit_type,
 			time_window_start, time_window_end, estimated_duration_minutes,
 			assigned_staff_id, assigned_vehicle_id,
-			status, priority_score, constraints, optimization_result,
+			status, priority_score, constraints::text, optimization_result::text,
 			care_plan_ref, activity_ref,
 			created_at, updated_at
 		FROM visit_schedules
@@ -236,8 +240,9 @@ func (r *VisitScheduleRepository) Update(ctx context.Context, patientID, schedul
 	updates := make(map[string]interface{})
 
 	if req.VisitDate != nil {
-		updates["visit_date"] = *req.VisitDate
-		existing.VisitDate = *req.VisitDate
+		visitDate := civil.DateOf(*req.VisitDate)
+		updates["visit_date"] = visitDate
+		existing.VisitDate = visitDate
 	}
 
 	if req.VisitType != nil {
@@ -328,7 +333,7 @@ func (r *VisitScheduleRepository) Update(ctx context.Context, patientID, schedul
 
 // Delete soft deletes a visit schedule (if soft delete is implemented, otherwise hard delete)
 func (r *VisitScheduleRepository) Delete(ctx context.Context, patientID, scheduleID string) error {
-	mutation := spanner.Delete("visit_schedules", spanner.Key{patientID, scheduleID})
+	mutation := spanner.Delete("visit_schedules", spanner.Key{scheduleID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -341,24 +346,25 @@ func (r *VisitScheduleRepository) Delete(ctx context.Context, patientID, schedul
 // GetUpcomingSchedules retrieves upcoming schedules for a patient
 func (r *VisitScheduleRepository) GetUpcomingSchedules(ctx context.Context, patientID string, days int) ([]*models.VisitSchedule, error) {
 	now := time.Now()
-	endDate := now.AddDate(0, 0, days)
+	nowDate := civil.DateOf(now)
+	endDate := civil.DateOf(now.AddDate(0, 0, days))
 
 	stmt := NewStatement(`SELECT
 			schedule_id, patient_id, visit_date, visit_type,
 			time_window_start, time_window_end, estimated_duration_minutes,
 			assigned_staff_id, assigned_vehicle_id,
-			status, priority_score, constraints, optimization_result,
+			status, priority_score, constraints::text, optimization_result::text,
 			care_plan_ref, activity_ref,
 			created_at, updated_at
 		FROM visit_schedules
 		WHERE patient_id = @patient_id
-		  AND visit_date >= @now
+		  AND visit_date >= @now_date
 		  AND visit_date <= @end_date
 		  AND status NOT IN ('cancelled', 'completed')
 		ORDER BY visit_date ASC, time_window_start ASC`,
 		map[string]interface{}{
 			"patient_id": patientID,
-			"now":        now,
+			"now_date":   nowDate,
 			"end_date":   endDate,
 		})
 

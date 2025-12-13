@@ -82,9 +82,9 @@ func (r *MedicationOrderRepository) Create(ctx context.Context, patientID string
 func (r *MedicationOrderRepository) GetByID(ctx context.Context, patientID, orderID string) (*models.MedicationOrder, error) {
 	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND order_id = @order_id`,
 		map[string]interface{}{
@@ -166,9 +166,9 @@ func (r *MedicationOrderRepository) List(ctx context.Context, filter *models.Med
 
 	stmt := NewStatement(fmt.Sprintf(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version
 		FROM medication_orders
 		%s
 		ORDER BY prescribed_date DESC
@@ -277,7 +277,7 @@ func (r *MedicationOrderRepository) Update(ctx context.Context, patientID, order
 }
 
 // UpdateWithVersion updates a medication order with optimistic locking
-func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
+func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patientID, orderID string, expectedVersion int64, req *models.MedicationOrderUpdateRequest) (*models.MedicationOrder, error) {
 	// First, get the existing order
 	existing, err := r.GetByID(ctx, patientID, orderID)
 	if err != nil {
@@ -361,7 +361,7 @@ func (r *MedicationOrderRepository) UpdateWithVersion(ctx context.Context, patie
 
 // Delete deletes a medication order
 func (r *MedicationOrderRepository) Delete(ctx context.Context, patientID, orderID string) error {
-	mutation := spanner.Delete("medication_orders", spanner.Key{patientID, orderID})
+	mutation := spanner.Delete("medication_orders", spanner.Key{orderID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -375,9 +375,9 @@ func (r *MedicationOrderRepository) Delete(ctx context.Context, patientID, order
 func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patientID string) ([]*models.MedicationOrder, error) {
 	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id AND status = 'active'
 		ORDER BY prescribed_date DESC`,
@@ -412,9 +412,9 @@ func (r *MedicationOrderRepository) GetActiveOrders(ctx context.Context, patient
 func (r *MedicationOrderRepository) GetOrdersByPrescription(ctx context.Context, patientID, prescribedBy string, prescribedDate time.Time) ([]*models.MedicationOrder, error) {
 	stmt := NewStatement(`SELECT
 			order_id, patient_id, status, intent,
-			medication, dosage_instruction,
+			medication::text, dosage_instruction::text,
 			prescribed_date, prescribed_by,
-			dispense_pharmacy, reason_reference, version
+			dispense_pharmacy::text, reason_reference, version
 		FROM medication_orders
 		WHERE patient_id = @patient_id
 		  AND prescribed_by = @prescribed_by

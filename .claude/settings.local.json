@@ -41,7 +41,10 @@
       "Bash(SPANNER_EMULATOR_HOST=localhost:9010 gcloud spanner instances create:*)",
       "Bash(python3:*)",
       "Bash(gcloud spanner databases ddl update:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker restart:*)",
+      "Bash(export SPANNER_EMULATOR_HOST=\"localhost:9010\")"
     ]
   }
 }

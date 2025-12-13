@@ -89,7 +89,7 @@ func (r *CarePlanRepository) GetByID(ctx context.Context, patientID, planID stri
 	stmt := NewStatement(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
-			goals, activities,
+			goals::text, activities::text,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND plan_id = @plan_id`,
@@ -168,7 +168,7 @@ func (r *CarePlanRepository) List(ctx context.Context, filter *models.CarePlanFi
 	stmt := NewStatement(fmt.Sprintf(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
-			goals, activities,
+			goals::text, activities::text,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		%s
@@ -281,7 +281,7 @@ func (r *CarePlanRepository) Update(ctx context.Context, patientID, planID strin
 }
 
 // UpdateWithVersion updates a care plan with optimistic locking
-func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, planID string, expectedVersion int, req *models.CarePlanUpdateRequest) (*models.CarePlan, error) {
+func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, planID string, expectedVersion int64, req *models.CarePlanUpdateRequest) (*models.CarePlan, error) {
 	// First, get the existing care plan
 	existing, err := r.GetByID(ctx, patientID, planID)
 	if err != nil {
@@ -368,7 +368,7 @@ func (r *CarePlanRepository) UpdateWithVersion(ctx context.Context, patientID, p
 
 // Delete deletes a care plan
 func (r *CarePlanRepository) Delete(ctx context.Context, patientID, planID string) error {
-	mutation := spanner.Delete("care_plans", spanner.Key{patientID, planID})
+	mutation := spanner.Delete("care_plans", spanner.Key{planID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -383,7 +383,7 @@ func (r *CarePlanRepository) GetActiveCarePlans(ctx context.Context, patientID s
 	stmt := NewStatement(`SELECT
 			plan_id, patient_id, status, intent,
 			title, description, period_start, period_end,
-			goals, activities,
+			goals::text, activities::text,
 			version, created_by, created_at, updated_at
 		FROM care_plans
 		WHERE patient_id = @patient_id AND status = 'active'

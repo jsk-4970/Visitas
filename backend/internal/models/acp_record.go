@@ -12,7 +12,7 @@ type ACPRecord struct {
 	ACPID       string    `json:"acp_id"`
 	PatientID   string    `json:"patient_id"`
 	RecordedDate time.Time `json:"recorded_date"`
-	Version     int       `json:"version"`
+	Version     int64     `json:"version"`
 	Status      string    `json:"status"` // "draft" | "active" | "superseded"
 
 	// Decision maker

@@ -81,8 +81,8 @@ func (r *ClinicalObservationRepository) Create(ctx context.Context, patientID st
 // GetByID retrieves a clinical observation by ID
 func (r *ClinicalObservationRepository) GetByID(ctx context.Context, patientID, observationID string) (*models.ClinicalObservation, error) {
 	stmt := NewStatement(`SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
 			performer_id, device_id, visit_record_id
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND observation_id = @observation_id`,
@@ -164,8 +164,8 @@ func (r *ClinicalObservationRepository) List(ctx context.Context, filter *models
 	params["offset"] = offset
 
 	stmt := NewStatement(fmt.Sprintf(`SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
 			performer_id, device_id, visit_record_id
 		FROM clinical_observations
 		%s
@@ -272,7 +272,7 @@ func (r *ClinicalObservationRepository) Update(ctx context.Context, patientID, o
 
 // Delete deletes a clinical observation
 func (r *ClinicalObservationRepository) Delete(ctx context.Context, patientID, observationID string) error {
-	mutation := spanner.Delete("clinical_observations", spanner.Key{patientID, observationID})
+	mutation := spanner.Delete("clinical_observations", spanner.Key{observationID})
 
 	_, err := r.spannerRepo.client.Apply(ctx, []*spanner.Mutation{mutation})
 	if err != nil {
@@ -285,8 +285,8 @@ func (r *ClinicalObservationRepository) Delete(ctx context.Context, patientID, o
 // GetLatestByCategory retrieves the latest observation for a given category
 func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context, patientID, category string) (*models.ClinicalObservation, error) {
 	stmt := NewStatement(`SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
 			performer_id, device_id, visit_record_id
 		FROM clinical_observations
 		WHERE patient_id = @patient_id AND category = @category
@@ -314,8 +314,8 @@ func (r *ClinicalObservationRepository) GetLatestByCategory(ctx context.Context,
 // GetTimeSeriesData retrieves time series observation data for trend analysis
 func (r *ClinicalObservationRepository) GetTimeSeriesData(ctx context.Context, patientID, category string, from, to time.Time) ([]*models.ClinicalObservation, error) {
 	stmt := NewStatement(`SELECT
-			observation_id, patient_id, category, code,
-			effective_datetime, issued, value, interpretation,
+			observation_id, patient_id, category, code::text,
+			effective_datetime, issued, value::text, interpretation,
 			performer_id, device_id, visit_record_id
 		FROM clinical_observations
 		WHERE patient_id = @patient_id

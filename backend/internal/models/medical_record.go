@@ -33,7 +33,7 @@ type MedicalRecord struct {
 	HasAIAssistance bool `json:"has_ai_assistance"`
 
 	// Optimistic Locking
-	Version int `json:"version"`
+	Version int64 `json:"version"`
 
 	// Audit
 	CreatedAt time.Time  `json:"created_at"`
@@ -69,7 +69,7 @@ type MedicalRecordUpdateRequest struct {
 	ScheduleID      *string         `json:"schedule_id,omitempty"`
 	TemplateID      *string         `json:"template_id,omitempty"`
 	AudioFileURL    *string         `json:"audio_file_url,omitempty"`
-	ExpectedVersion *int            `json:"expected_version,omitempty"` // Optimistic locking
+	ExpectedVersion *int64          `json:"expected_version,omitempty"` // Optimistic locking
 }
 
 // MedicalRecordFilter represents filter options for listing medical records
@@ -96,7 +96,7 @@ type MedicalRecordTemplate struct {
 	Specialty           *string         `json:"specialty,omitempty"` // general, internal_medicine, neurology, palliative_care
 	SOAPTemplate        json.RawMessage `json:"soap_template"`
 	IsSystemTemplate    bool            `json:"is_system_template"`
-	UsageCount          int             `json:"usage_count"`
+	UsageCount          int64           `json:"usage_count"`
 	CreatedAt           time.Time       `json:"created_at"`
 	CreatedBy           string          `json:"created_by"`
 	UpdatedAt           time.Time       `json:"updated_at"`
