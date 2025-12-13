@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -46,7 +45,7 @@ type StaffPatientAssignment struct {
 	Status         AssignmentStatus `json:"status"`
 	AssignedAt     time.Time        `json:"assigned_at"`
 	AssignedBy     string           `json:"assigned_by"`
-	InactivatedAt  sql.NullTime     `json:"inactivated_at,omitempty"`
+	InactivatedAt  spanner.NullTime `json:"inactivated_at,omitempty"`
 	InactivatedBy  string           `json:"inactivated_by,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`

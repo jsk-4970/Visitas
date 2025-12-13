@@ -45,7 +45,8 @@
       "Bash(docker-compose:*)",
       "Bash(docker restart:*)",
       "Bash(export SPANNER_EMULATOR_HOST=\"localhost:9010\")",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(cd /Users/aburi/Desktop/Visitas/backend && go vet:*)"
     ]
   }
 }
