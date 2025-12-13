@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"cloud.google.com/go/civil"
 	"github.com/visitas/backend/internal/models"
 )
 
@@ -59,6 +58,7 @@ type CarePlanRepositoryInterface interface {
 	GetByID(ctx context.Context, patientID, planID string) (*models.CarePlan, error)
 	List(ctx context.Context, filter *models.CarePlanFilter) ([]*models.CarePlan, error)
 	Update(ctx context.Context, patientID, planID string, req *models.CarePlanUpdateRequest) (*models.CarePlan, error)
+	UpdateWithVersion(ctx context.Context, patientID, planID string, expectedVersion int64, req *models.CarePlanUpdateRequest) (*models.CarePlan, error)
 	Delete(ctx context.Context, patientID, planID string) error
 	GetActiveCarePlans(ctx context.Context, patientID string) ([]*models.CarePlan, error)
 }
@@ -70,7 +70,7 @@ type VisitScheduleRepositoryInterface interface {
 	List(ctx context.Context, filter *models.VisitScheduleFilter) ([]*models.VisitSchedule, error)
 	Update(ctx context.Context, patientID, scheduleID string, req *models.VisitScheduleUpdateRequest) (*models.VisitSchedule, error)
 	Delete(ctx context.Context, patientID, scheduleID string) error
-	GetUpcomingSchedules(ctx context.Context, patientID string, fromDate civil.Date) ([]*models.VisitSchedule, error)
+	GetUpcomingSchedules(ctx context.Context, patientID string, days int) ([]*models.VisitSchedule, error)
 }
 
 // ACPRecordRepositoryInterface defines the interface for ACP record repository operations
@@ -80,7 +80,8 @@ type ACPRecordRepositoryInterface interface {
 	List(ctx context.Context, filter *models.ACPRecordFilter) ([]*models.ACPRecord, error)
 	Update(ctx context.Context, patientID, acpID string, req *models.ACPRecordUpdateRequest) (*models.ACPRecord, error)
 	Delete(ctx context.Context, patientID, acpID string) error
-	GetLatestACPRecord(ctx context.Context, patientID string) (*models.ACPRecord, error)
+	GetLatestACP(ctx context.Context, patientID string) (*models.ACPRecord, error)
+	GetACPHistory(ctx context.Context, patientID string) ([]*models.ACPRecord, error)
 }
 
 // MedicalRecordRepositoryInterface defines the interface for medical record repository operations
@@ -94,9 +95,12 @@ type MedicalRecordRepositoryInterface interface {
 
 // MedicalRecordTemplateRepositoryInterface defines the interface for medical record template repository operations
 type MedicalRecordTemplateRepositoryInterface interface {
-	Create(ctx context.Context, req *models.MedicalRecordTemplateCreateRequest) (*models.MedicalRecordTemplate, error)
+	Create(ctx context.Context, req *models.MedicalRecordTemplateCreateRequest, createdBy string) (*models.MedicalRecordTemplate, error)
 	GetByID(ctx context.Context, templateID string) (*models.MedicalRecordTemplate, error)
 	List(ctx context.Context, filter *models.MedicalRecordTemplateFilter) ([]*models.MedicalRecordTemplate, error)
-	Update(ctx context.Context, templateID string, req *models.MedicalRecordTemplateUpdateRequest) (*models.MedicalRecordTemplate, error)
+	Update(ctx context.Context, templateID string, req *models.MedicalRecordTemplateUpdateRequest, updatedBy string) (*models.MedicalRecordTemplate, error)
 	Delete(ctx context.Context, templateID string) error
+	IncrementUsageCount(ctx context.Context, templateID string) error
+	GetSystemTemplates(ctx context.Context) ([]*models.MedicalRecordTemplate, error)
+	GetBySpecialty(ctx context.Context, specialty string) ([]*models.MedicalRecordTemplate, error)
 }
